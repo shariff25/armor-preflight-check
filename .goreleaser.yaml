@@ -1,0 +1,48 @@
+# Release pipeline for armor-preflight.
+# `goreleaser release --snapshot --clean` builds everything locally without publishing.
+version: 2
+project_name: armor-preflight
+
+builds:
+  - id: armor-preflight
+    main: ./cmd/armor-preflight
+    binary: armor-preflight
+    env: [CGO_ENABLED=0]
+    flags: [-trimpath]
+    goos: [linux, darwin]
+    goarch: [amd64, arm64]
+    ldflags:
+      - -s -w
+      - -X github.com/shariff25/agent-goverance-OS/armor-preflight/internal/buildinfo.Version={{.Version}}
+      - -X github.com/shariff25/agent-goverance-OS/armor-preflight/internal/buildinfo.Commit={{.ShortCommit}}
+      - -X github.com/shariff25/agent-goverance-OS/armor-preflight/internal/buildinfo.Date={{.Date}}
+
+archives:
+  - formats: [tar.gz]
+    name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+
+checksum:
+  name_template: checksums.txt
+  algorithm: sha256
+
+# One SPDX SBOM per archive (requires syft on PATH).
+sboms:
+  - artifacts: archive
+
+# Sign the checksum file with cosign; verifying it covers every artifact.
+# The key is supplied by the release environment (COSIGN_KEY / COSIGN_PASSWORD);
+# which key or keyless identity Fortanix publishes is recorded in DECISIONS.md.
+signs:
+  - cmd: cosign
+    signature: "${artifact}.sig"
+    certificate: "${artifact}.pem"
+    args: ["sign-blob", "--yes", "--key=env://COSIGN_KEY", "--output-signature=${signature}", "--output-certificate=${certificate}", "${artifact}"]
+    artifacts: checksum
+
+# The probe image is added to this pipeline in milestone M4.
+
+snapshot:
+  version_template: "{{ incpatch .Version }}-snapshot"
+
+changelog:
+  disable: true

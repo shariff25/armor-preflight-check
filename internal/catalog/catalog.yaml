@@ -1,0 +1,10 @@
+# Armor Preflight check catalog.
+#
+# This file is the single source of truth for what Preflight checks. It is
+# embedded in the binary. Checks are added in milestone M1.
+catalogVersion: "2026.09"
+
+# Armor versions this catalog covers. Listed explicitly: ranges are not
+# guessed (see DECISIONS.md).
+armorVersions:
+  - "1.0.404"

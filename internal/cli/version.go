@@ -1,0 +1,31 @@
+package cli
+
+import (
+	"fmt"
+	"strings"
+
+	"github.com/spf13/cobra"
+
+	"github.com/shariff25/agent-goverance-OS/armor-preflight/internal/buildinfo"
+	"github.com/shariff25/agent-goverance-OS/armor-preflight/internal/catalog"
+	"github.com/shariff25/agent-goverance-OS/armor-preflight/internal/exitcode"
+)
+
+func newVersionCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:   "version",
+		Short: "Print the Preflight version, catalog version and supported Armor versions",
+		Args:  cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			c, err := catalog.Load()
+			if err != nil {
+				return exitcode.ToolFailure(err)
+			}
+			out := cmd.OutOrStdout()
+			fmt.Fprintf(out, "armor-preflight %s (commit %s, built %s)\n", buildinfo.Version, buildinfo.Commit, buildinfo.Date)
+			fmt.Fprintf(out, "catalog %s\n", c.CatalogVersion)
+			fmt.Fprintf(out, "supported Armor versions: %s\n", strings.Join(c.ArmorVersions, ", "))
+			return nil
+		},
+	}
+}

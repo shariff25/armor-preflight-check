@@ -1,6 +1,6 @@
 # Armor Preflight: Phase 1 implementation plan
 
-This plan covers how `armor-preflight` Phase 1 gets built from the build brief. It covers the architecture, the build order, how each acceptance criterion gets tested, and the places where the brief conflicts with itself or leaves a decision open. Those places are listed in §8. The ones marked **needs sign-off** change the design, so they should be settled before M4.
+This plan covers how `armor-preflight` Phase 1 gets built from the build brief. It covers the architecture, the build order, how each acceptance criterion gets tested, and the places where the brief conflicts with itself or leaves a decision open. Those places are listed in §8, each with the default the build uses.
 
 ---
 
@@ -243,17 +243,17 @@ Each milestone ends green in CI and is committed on its own.
 
 ## 8. Conflicts and open decisions in the brief
 
-These are recorded in `DECISIONS.md` as each is implemented. The **needs sign-off** items affect the security story.
+These are recorded in `DECISIONS.md` as each is implemented.
 
-- **D-1 SelfSubjectAccessReview in workstation mode.** K8S-09 has to POST SelfSubjectAccessReviews, and those show up as `create` in the audit log. That conflicts with "zero create calls" in R1.4. *Default:* allow only `selfsubjectaccessreviews` and `selfsubjectrulesreviews`. They are non-persisted, so nothing is stored. Document this in the security brief, and have the audit-log test exclude those two resources explicitly. **Needs sign-off.**
+- **D-1 SelfSubjectAccessReview in workstation mode.** K8S-09 has to POST SelfSubjectAccessReviews, and those show up as `create` in the audit log. That conflicts with "zero create calls" in R1.4. *Default:* allow only `selfsubjectaccessreviews` and `selfsubjectrulesreviews`. They are non-persisted, so nothing is stored. Document this in the security brief, and have the audit-log test exclude those two resources explicitly.
 
 - **D-2 A ClusterRole can't confine writes to a namespace whose name is only known at run time.** RBAC can't express "create pods only in `armor-preflight-*`", and the creator of a namespace gets no rights inside it. *Options:*
   - (a) The ClusterRole grants create and delete on namespaces, pods, PVCs, Services, ConfigMaps and Secrets cluster-wide, and a shipped **ValidatingAdmissionPolicy** (GA in 1.30) limits the Preflight group to namespaces with the `armor-preflight-` prefix and the managed-by label.
   - (b) Use one fixed namespace `armor-preflight`, created once by the admin with a namespaced Role, and give each run its own run-id-labelled objects inside it.
 
-  *Recommendation:* (a). It keeps the brief's per-run namespace and gives an enforced boundary that security teams can read. (b) is the fallback if customers won't install admission policies. **Needs sign-off.**
+  *Default:* (a). It keeps the brief's per-run namespace and gives an enforced boundary that security teams can read. (b) is the fallback if customers won't install admission policies.
 
-- **D-3 Credentials inside probes.** REG-03 (resolve by digest from each pool) and BAK-02 (blob read and write from the node) need the registry password and storage key inside the probe. The brief's list of written objects doesn't include Secrets. *Default:* create a Secret in the run namespace, mount it read-only, and let the namespace delete remove it. Add `secrets` to the admission-scoped write list. **Needs sign-off.**
+- **D-3 Credentials inside probes.** REG-03 (resolve by digest from each pool) and BAK-02 (blob read and write from the node) need the registry password and storage key inside the probe. The brief's list of written objects doesn't include Secrets. *Default:* create a Secret in the run namespace, mount it read-only, and let the namespace delete remove it. Add `secrets` to the admission-scoped write list.
 
 - **D-4 K8S-10 and K8S-11 create objects.** These checks create objects, so they can't run in workstation mode. *Default:* mark them `runsIn: cluster-write`. They run in cluster mode inside the run namespace, and workstation mode skips them with "workstation mode".
 
@@ -309,7 +309,7 @@ These are recorded in `DECISIONS.md` as each is implemented. The **needs sign-of
 
 | Risk | Mitigation |
 |---|---|
-| D-2 and D-3 are rejected by customer security | Fallback option (b); decide before M4 |
+| D-2 and D-3 are rejected by customer security | Fallback option (b) for D-2; weaker workstation-only checks for D-3 |
 | CC-05 SGX toolchain choice slips | It's isolated behind the interface and a separate image, so the rest of Phase 1 ships with CC-05 skipped and a documented reason |
 | Real endpoint behaviour differs from D-6 or D-7 | Everything is catalog data, and verification is a release checklist item |
 | AKS SKU size table goes stale | It's catalog data, and an unknown SKU gives warn ("unknown SKU size, verify manually"), never pass |

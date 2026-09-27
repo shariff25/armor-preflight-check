@@ -2,6 +2,11 @@
 
 `armor-preflight` checks whether a customer environment is ready for a Fortanix Armor on-prem install, before anyone starts the install. It checks every prerequisite from where Armor will actually run and tells each customer team what it needs to fix.
 
+For how it works inside (the run flow, the check catalog and its dependency graph, engine rules, probes, CC-05,
+outputs and the security model), see **[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)**.
+
+![armor-preflight architecture overview](docs/architecture.svg)
+
 > **Status: Phase 1 complete (milestone M7).**
 > - All 35 checks are implemented.
 > - Releases are signed, with checksums, SBOMs and a probe image archive for mirrors.

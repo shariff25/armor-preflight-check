@@ -1,0 +1,314 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1400 1140" width="1400" height="1140" role="img" aria-label="armor-preflight architecture">
+<defs><marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#8c959f"/></marker><marker id="ahb" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#0969da"/></marker><marker id="ahg" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#1a7f37"/></marker></defs>
+<rect x="0" y="0" width="1400" height="1140" rx="0" fill="#ffffff" stroke="#ffffff" stroke-width="1.2"/>
+<text x="30" y="38" font-family="-apple-system,'Segoe UI',Helvetica,Arial,sans-serif" font-size="22" font-weight="bold" fill="#1f2328" text-anchor="start">armor-preflight — architecture overview</text>
+<text x="30" y="60" font-family="-apple-system,'Segoe UI',Helvetica,Arial,sans-serif" font-size="13" font-weight="normal" fill="#59636e" text-anchor="start">Checks a customer's Kubernetes (AKS) environment against all 35 Fortanix Armor on-prem prerequisites before the install, and routes every gap to the team that can fix it</text>
+<rect x="30" y="80" width="190" height="500" rx="8" fill="#f6f8fa" stroke="#d0d7de" stroke-width="1.2"/>
+<text x="125" y="104" font-family="-apple-system,'Segoe UI',Helvetica,Arial,sans-serif" font-size="12" font-weight="bold" fill="#59636e" text-anchor="middle">INPUTS</text>
+<rect x="42" y="118" width="166" height="100" rx="6" fill="#ffffff" stroke="#d0d7de" stroke-width="1.2"/>
+<text x="125" y="136" font-family="-apple-system,'Segoe UI',Helvetica,Arial,sans-serif" font-size="12" font-weight="bold" fill="#1f2328" text-anchor="middle">settings.yaml  (-f)</text>
+<text x="125" y="152" font-family="-apple-system,'Segoe UI',Helvetica,Arial,sans-serif" font-size="10.5" font-weight="normal" fill="#59636e" text-anchor="middle">armorVersion, domains,</text>
+<text x="125" y="166" font-family="-apple-system,'Segoe UI',Helvetica,Arial,sans-serif" font-size="10.5" font-weight="normal" fill="#59636e" text-anchor="middle">certificates, registry,</text>
+<text x="125" y="180" font-family="-apple-system,'Segoe UI',Helvetica,Arial,sans-serif" font-size="10.5" font-weight="normal" fill="#59636e" text-anchor="middle">storage, proxy, syslog,</text>
+<text x="125" y="194" font-family="-apple-system,'Segoe UI',Helvetica,Arial,sans-serif" font-size="10.5" font-weight="normal" fill="#59636e" text-anchor="middle">attestation, nodePools</text>
+<text x="125" y="208" font-family="-apple-system,'Segoe UI',Helvetica,Arial,sans-serif" font-size="10.5" font-weight="normal" fill="#59636e" text-anchor="middle">(secret keys rejected)</text>
+<rect x="42" y="228" width="166" height="86" rx="6" fill="#ffffff" stroke="#d0d7de" stroke-width="1.2"/>
+<text x="125" y="246" font-family="-apple-system,'Segoe UI',Helvetica,Arial,sans-serif" font-size="12" font-weight="bold" fill="#1f2328" text-anchor="middle">Environment secrets</text>
+<text x="125" y="262" font-family="-apple-system,'Segoe UI',Helvetica,Arial,sans-serif" font-size="10.5" font-weight="normal" fill="#59636e" text-anchor="middle">named by the settings:</text>
+<text x="125" y="276" font-family="-apple-system,'Segoe UI',Helvetica,Arial,sans-serif" font-size="10.5" font-weight="normal" fill="#59636e" text-anchor="middle">registry.passwordEnv</text>
+<text x="125" y="290" font-family="-apple-system,'Segoe UI',Helvetica,Arial,sans-serif" font-size="10.5" font-weight="normal" fill="#59636e" text-anchor="middle">storage.credentialsEnv</text>
+<text x="125" y="304" font-family="-apple-system,'Segoe UI',Helvetica,Arial,sans-serif" font-size="10.5" font-weight="normal" fill="#59636e" text-anchor="middle">(masked everywhere)</text>
+<rect x="42" y="324" width="166" height="72" rx="6" fill="#ffffff" stroke="#d0d7de" stroke-width="1.2"/>
+<text x="125" y="342" font-family="-apple-system,'Segoe UI',Helvetica,Arial,sans-serif" font-size="12" font-weight="bold" fill="#1f2328" text-anchor="middle">kubeconfig</text>
+<text x="125" y="358" font-family="-apple-system,'Segoe UI',Helvetica,Arial,sans-serif" font-size="10.5" font-weight="normal" fill="#59636e" text-anchor="middle">-k / -c</text>
+<text x="125" y="372" font-family="-apple-system,'Segoe UI',Helvetica,Arial,sans-serif" font-size="10.5" font-weight="normal" fill="#59636e" text-anchor="middle">installer's identity</text>
+<text x="125" y="386" font-family="-apple-system,'Segoe UI',Helvetica,Arial,sans-serif" font-size="10.5" font-weight="normal" fill="#59636e" text-anchor="middle">and cluster context</text>
+<rect x="42" y="406" width="166" height="86" rx="6" fill="#ffffff" stroke="#d0d7de" stroke-width="1.2"/>
+<text x="125" y="424" font-family="-apple-system,'Segoe UI',Helvetica,Arial,sans-serif" font-size="12" font-weight="bold" fill="#1f2328" text-anchor="middle">Flags</text>
+<text x="125" y="440" font-family="-apple-system,'Segoe UI',Helvetica,Arial,sans-serif" font-size="10.5" font-weight="normal" fill="#59636e" text-anchor="middle">-o output dir, -t timeout</text>
+<text x="125" y="454" font-family="-apple-system,'Segoe UI',Helvetica,Arial,sans-serif" font-size="10.5" font-weight="normal" fill="#59636e" text-anchor="middle">--probe-image</text>
+<text x="125" y="468" font-family="-apple-system,'Segoe UI',Helvetica,Arial,sans-serif" font-size="10.5" font-weight="normal" fill="#59636e" text-anchor="middle">--sgx-probe-image</text>
+<text x="125" y="482" font-family="-apple-system,'Segoe UI',Helvetica,Arial,sans-serif" font-size="10.5" font-weight="normal" fill="#59636e" text-anchor="middle">--probe-timeout</text>
+<line x1="220" y1="320" x2="238" y2="320" stroke="#8c959f" stroke-width="1.4" marker-end="url(#ah)"/>
+<rect x="1180" y="80" width="190" height="500" rx="8" fill="#f6f8fa" stroke="#d0d7de" stroke-width="1.2"/>
+<text x="1275" y="104" font-family="-apple-system,'Segoe UI',Helvetica,Arial,sans-serif" font-size="12" font-weight="bold" fill="#59636e" text-anchor="middle">OUTPUTS  (./preflight-out)</text>
+<rect x="1192" y="118" width="166" height="58" rx="6" fill="#ffffff" stroke="#d0d7de" stroke-width="1.2"/>
+<text x="1275" y="136" font-family="-apple-system,'Segoe UI',Helvetica,Arial,sans-serif" font-size="12" font-weight="bold" fill="#1f2328" text-anchor="middle">terminal summary</text>
+<text x="1275" y="152" font-family="-apple-system,'Segoe UI',Helvetica,Arial,sans-serif" font-size="10.5" font-weight="normal" fill="#59636e" text-anchor="middle">verdict, counts per area,</text>
+<text x="1275" y="166" font-family="-apple-system,'Segoe UI',Helvetica,Arial,sans-serif" font-size="10.5" font-weight="normal" fill="#59636e" text-anchor="middle">failures by owning team</text>
+<rect x="1192" y="184" width="166" height="72" rx="6" fill="#ffffff" stroke="#d0d7de" stroke-width="1.2"/>
+<text x="1275" y="202" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="12" font-weight="bold" fill="#1f2328" text-anchor="middle">report.html</text>
+<text x="1275" y="218" font-family="-apple-system,'Segoe UI',Helvetica,Arial,sans-serif" font-size="10.5" font-weight="normal" fill="#59636e" text-anchor="middle">offline, no scripts, CSP;</text>
+<text x="1275" y="232" font-family="-apple-system,'Segoe UI',Helvetica,Arial,sans-serif" font-size="10.5" font-weight="normal" fill="#59636e" text-anchor="middle">one section per team</text>
+<text x="1275" y="246" font-family="-apple-system,'Segoe UI',Helvetica,Arial,sans-serif" font-size="10.5" font-weight="normal" fill="#59636e" text-anchor="middle">(prints on its own page)</text>
+<rect x="1192" y="264" width="166" height="58" rx="6" fill="#ffffff" stroke="#d0d7de" stroke-width="1.2"/>
+<text x="1275" y="282" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="12" font-weight="bold" fill="#1f2328" text-anchor="middle">result.json</text>
+<text x="1275" y="298" font-family="-apple-system,'Segoe UI',Helvetica,Arial,sans-serif" font-size="10.5" font-weight="normal" fill="#59636e" text-anchor="middle">schema v1: results,</text>
+<text x="1275" y="312" font-family="-apple-system,'Segoe UI',Helvetica,Arial,sans-serif" font-size="10.5" font-weight="normal" fill="#59636e" text-anchor="middle">probes, RBAC used</text>
+<rect x="1192" y="330" width="166" height="58" rx="6" fill="#ffffff" stroke="#d0d7de" stroke-width="1.2"/>
+<text x="1275" y="348" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="12" font-weight="bold" fill="#1f2328" text-anchor="middle">firewall-request.csv</text>
+<text x="1275" y="364" font-family="-apple-system,'Segoe UI',Helvetica,Arial,sans-serif" font-size="10.5" font-weight="normal" fill="#59636e" text-anchor="middle">one row per blocked</text>
+<text x="1275" y="378" font-family="-apple-system,'Segoe UI',Helvetica,Arial,sans-serif" font-size="10.5" font-weight="normal" fill="#59636e" text-anchor="middle">egress path, per pool</text>
+<rect x="1192" y="396" width="166" height="44" rx="6" fill="#ffffff" stroke="#d0d7de" stroke-width="1.2"/>
+<text x="1275" y="414" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="12" font-weight="bold" fill="#1f2328" text-anchor="middle">imageOverrides.yaml</text>
+<text x="1275" y="430" font-family="-apple-system,'Segoe UI',Helvetica,Arial,sans-serif" font-size="10.5" font-weight="normal" fill="#59636e" text-anchor="middle">mirror mode (REG-04)</text>
+<rect x="1192" y="448" width="166" height="72" rx="6" fill="#ffffff" stroke="#d0d7de" stroke-width="1.2"/>
+<text x="1275" y="466" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="12" font-weight="bold" fill="#1f2328" text-anchor="middle">bundle.tgz</text>
+<text x="1275" y="482" font-family="-apple-system,'Segoe UI',Helvetica,Arial,sans-serif" font-size="10.5" font-weight="normal" fill="#59636e" text-anchor="middle">`bundle`: result.json,</text>
+<text x="1275" y="496" font-family="-apple-system,'Segoe UI',Helvetica,Arial,sans-serif" font-size="10.5" font-weight="normal" fill="#59636e" text-anchor="middle">versions.json, SHA-256</text>
+<text x="1275" y="510" font-family="-apple-system,'Segoe UI',Helvetica,Arial,sans-serif" font-size="10.5" font-weight="normal" fill="#59636e" text-anchor="middle">manifest (redacted)</text>
+<text x="1275" y="566" font-family="-apple-system,'Segoe UI',Helvetica,Arial,sans-serif" font-size="10" font-weight="normal" fill="#59636e" text-anchor="middle" font-style="italic">files 0640 in a 0750 dir</text>
+<line x1="1162" y1="320" x2="1178" y2="320" stroke="#8c959f" stroke-width="1.4" marker-end="url(#ah)"/>
+<rect x="240" y="80" width="920" height="500" rx="10" fill="#ffffff" stroke="#8c959f" stroke-width="1.5"/>
+<rect x="252" y="90" width="896" height="44" rx="6" fill="#eaeef2" stroke="#8c959f" stroke-width="1.2"/>
+<text x="700" y="108" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="14" font-weight="bold" fill="#1f2328" text-anchor="middle">armor-preflight  —  one static Go binary (Linux amd64 / arm64)</text>
+<text x="700" y="125" font-family="-apple-system,'Segoe UI',Helvetica,Arial,sans-serif" font-size="10.5" font-weight="normal" fill="#59636e" text-anchor="middle">no telemetry · no update check · talks only to the API server and the endpoints under test</text>
+<rect x="262" y="142" width="137.0" height="24" rx="12" fill="#ffffff" stroke="#8c959f" stroke-width="1.2"/>
+<text x="330.5" y="158" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11" font-weight="normal" fill="#1f2328" text-anchor="middle">run workstation</text>
+<rect x="409.0" y="142" width="107.4" height="24" rx="12" fill="#ffffff" stroke="#8c959f" stroke-width="1.2"/>
+<text x="462.7" y="158" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11" font-weight="normal" fill="#1f2328" text-anchor="middle">run cluster</text>
+<rect x="526.4" y="142" width="137.0" height="24" rx="12" fill="#ffffff" stroke="#8c959f" stroke-width="1.2"/>
+<text x="594.9" y="158" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11" font-weight="normal" fill="#1f2328" text-anchor="middle">bundle [--list]</text>
+<rect x="673.4" y="142" width="159.20000000000002" height="24" rx="12" fill="#ffffff" stroke="#8c959f" stroke-width="1.2"/>
+<text x="753.0" y="158" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11" font-weight="normal" fill="#1f2328" text-anchor="middle">cleanup [--run-id]</text>
+<rect x="842.6" y="142" width="77.80000000000001" height="24" rx="12" fill="#ffffff" stroke="#8c959f" stroke-width="1.2"/>
+<text x="881.5" y="158" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11" font-weight="normal" fill="#1f2328" text-anchor="middle">version</text>
+<text x="932.4000000000001" y="158" font-family="-apple-system,'Segoe UI',Helvetica,Arial,sans-serif" font-size="10" font-weight="normal" fill="#59636e" text-anchor="start">← commands</text>
+<rect x="252" y="176" width="896" height="106" rx="6" fill="#f6f8fa" stroke="#d0d7de" stroke-width="1.2"/>
+<text x="262" y="194" font-family="-apple-system,'Segoe UI',Helvetica,Arial,sans-serif" font-size="11" font-weight="bold" fill="#59636e" text-anchor="start">WHAT `run` DOES  (internal/cli/run.go)</text>
+<rect x="262.0" y="202" width="90" height="70" rx="6" fill="#ddf4ff" stroke="#54aeff" stroke-width="1.2"/>
+<text x="307.0" y="218" font-family="-apple-system,'Segoe UI',Helvetica,Arial,sans-serif" font-size="10" font-weight="normal" fill="#59636e" text-anchor="middle">1</text>
+<text x="307.0" y="236" font-family="-apple-system,'Segoe UI',Helvetica,Arial,sans-serif" font-size="12.5" font-weight="bold" fill="#1f2328" text-anchor="middle">Load catalog</text>
+<text x="307.0" y="254" font-family="-apple-system,'Segoe UI',Helvetica,Arial,sans-serif" font-size="9.8" font-weight="normal" fill="#59636e" text-anchor="middle">35 checks</text>
+<line x1="352.0" y1="237" x2="362.5" y2="237" stroke="#8c959f" stroke-width="1.2" marker-end="url(#ah)"/>
+<rect x="362.5" y="202" width="90" height="70" rx="6" fill="#ddf4ff" stroke="#54aeff" stroke-width="1.2"/>
+<text x="407.5" y="218" font-family="-apple-system,'Segoe UI',Helvetica,Arial,sans-serif" font-size="10" font-weight="normal" fill="#59636e" text-anchor="middle">2</text>
+<text x="407.5" y="236" font-family="-apple-system,'Segoe UI',Helvetica,Arial,sans-serif" font-size="12.5" font-weight="bold" fill="#1f2328" text-anchor="middle">Settings</text>
+<text x="407.5" y="254" font-family="-apple-system,'Segoe UI',Helvetica,Arial,sans-serif" font-size="9.8" font-weight="normal" fill="#59636e" text-anchor="middle">+ version gate</text>
+<line x1="452.5" y1="237" x2="463.0" y2="237" stroke="#8c959f" stroke-width="1.2" marker-end="url(#ah)"/>
+<rect x="463.0" y="202" width="90" height="70" rx="6" fill="#ddf4ff" stroke="#54aeff" stroke-width="1.2"/>
+<text x="508.0" y="218" font-family="-apple-system,'Segoe UI',Helvetica,Arial,sans-serif" font-size="10" font-weight="normal" fill="#59636e" text-anchor="middle">3</text>
+<text x="508.0" y="236" font-family="-apple-system,'Segoe UI',Helvetica,Arial,sans-serif" font-size="12.5" font-weight="bold" fill="#1f2328" text-anchor="middle">Redactor</text>
+<text x="508.0" y="254" font-family="-apple-system,'Segoe UI',Helvetica,Arial,sans-serif" font-size="9.8" font-weight="normal" fill="#59636e" text-anchor="middle">arm secret masks</text>
+<line x1="553.0" y1="237" x2="563.5" y2="237" stroke="#8c959f" stroke-width="1.2" marker-end="url(#ah)"/>
+<rect x="563.5" y="202" width="90" height="70" rx="6" fill="#ddf4ff" stroke="#54aeff" stroke-width="1.2"/>
+<text x="608.5" y="218" font-family="-apple-system,'Segoe UI',Helvetica,Arial,sans-serif" font-size="10" font-weight="normal" fill="#59636e" text-anchor="middle">4</text>
+<text x="608.5" y="236" font-family="-apple-system,'Segoe UI',Helvetica,Arial,sans-serif" font-size="12.5" font-weight="bold" fill="#1f2328" text-anchor="middle">Kube client</text>
+<text x="608.5" y="254" font-family="-apple-system,'Segoe UI',Helvetica,Arial,sans-serif" font-size="9.8" font-weight="normal" fill="#59636e" text-anchor="middle">+ MutationGuard</text>
+<line x1="653.5" y1="237" x2="664.0" y2="237" stroke="#8c959f" stroke-width="1.2" marker-end="url(#ah)"/>
+<rect x="664.0" y="202" width="90" height="70" rx="6" fill="#ddf4ff" stroke="#54aeff" stroke-width="1.2"/>
+<text x="709.0" y="218" font-family="-apple-system,'Segoe UI',Helvetica,Arial,sans-serif" font-size="10" font-weight="normal" fill="#59636e" text-anchor="middle">5</text>
+<text x="709.0" y="236" font-family="-apple-system,'Segoe UI',Helvetica,Arial,sans-serif" font-size="12.5" font-weight="bold" fill="#1f2328" text-anchor="middle">Topology</text>
+<text x="709.0" y="254" font-family="-apple-system,'Segoe UI',Helvetica,Arial,sans-serif" font-size="9.8" font-weight="normal" fill="#59636e" text-anchor="middle">node pools, SGX</text>
+<line x1="754.0" y1="237" x2="764.5" y2="237" stroke="#8c959f" stroke-width="1.2" marker-end="url(#ah)"/>
+<rect x="764.5" y="202" width="90" height="70" rx="6" fill="#fff1e5" stroke="#fb8f44" stroke-width="1.2"/>
+<text x="809.5" y="218" font-family="-apple-system,'Segoe UI',Helvetica,Arial,sans-serif" font-size="10" font-weight="normal" fill="#59636e" text-anchor="middle">6</text>
+<text x="809.5" y="236" font-family="-apple-system,'Segoe UI',Helvetica,Arial,sans-serif" font-size="12.5" font-weight="bold" fill="#1f2328" text-anchor="middle">Probes</text>
+<text x="809.5" y="254" font-family="-apple-system,'Segoe UI',Helvetica,Arial,sans-serif" font-size="9.8" font-weight="normal" fill="#59636e" text-anchor="middle">cluster mode only</text>
+<line x1="854.5" y1="237" x2="865.0" y2="237" stroke="#8c959f" stroke-width="1.2" marker-end="url(#ah)"/>
+<rect x="865.0" y="202" width="90" height="70" rx="6" fill="#ddf4ff" stroke="#54aeff" stroke-width="1.2"/>
+<text x="910.0" y="218" font-family="-apple-system,'Segoe UI',Helvetica,Arial,sans-serif" font-size="10" font-weight="normal" fill="#59636e" text-anchor="middle">7</text>
+<text x="910.0" y="236" font-family="-apple-system,'Segoe UI',Helvetica,Arial,sans-serif" font-size="12.5" font-weight="bold" fill="#1f2328" text-anchor="middle">Engine</text>
+<text x="910.0" y="254" font-family="-apple-system,'Segoe UI',Helvetica,Arial,sans-serif" font-size="9.8" font-weight="normal" fill="#59636e" text-anchor="middle">DAG + skips</text>
+<line x1="955.0" y1="237" x2="965.5" y2="237" stroke="#8c959f" stroke-width="1.2" marker-end="url(#ah)"/>
+<rect x="965.5" y="202" width="90" height="70" rx="6" fill="#ddf4ff" stroke="#54aeff" stroke-width="1.2"/>
+<text x="1010.5" y="218" font-family="-apple-system,'Segoe UI',Helvetica,Arial,sans-serif" font-size="10" font-weight="normal" fill="#59636e" text-anchor="middle">8</text>
+<text x="1010.5" y="236" font-family="-apple-system,'Segoe UI',Helvetica,Arial,sans-serif" font-size="12.5" font-weight="bold" fill="#1f2328" text-anchor="middle">Outputs</text>
+<text x="1010.5" y="254" font-family="-apple-system,'Segoe UI',Helvetica,Arial,sans-serif" font-size="9.8" font-weight="normal" fill="#59636e" text-anchor="middle">4 files + summary</text>
+<line x1="1055.5" y1="237" x2="1066.0" y2="237" stroke="#8c959f" stroke-width="1.2" marker-end="url(#ah)"/>
+<rect x="1066.0" y="202" width="90" height="70" rx="6" fill="#ddf4ff" stroke="#54aeff" stroke-width="1.2"/>
+<text x="1111.0" y="218" font-family="-apple-system,'Segoe UI',Helvetica,Arial,sans-serif" font-size="10" font-weight="normal" fill="#59636e" text-anchor="middle">9</text>
+<text x="1111.0" y="236" font-family="-apple-system,'Segoe UI',Helvetica,Arial,sans-serif" font-size="12.5" font-weight="bold" fill="#1f2328" text-anchor="middle">Verdict</text>
+<text x="1111.0" y="254" font-family="-apple-system,'Segoe UI',Helvetica,Arial,sans-serif" font-size="9.8" font-weight="normal" fill="#59636e" text-anchor="middle">exit 0 / 1 / 2 / 3</text>
+<rect x="252" y="292" width="896" height="132" rx="6" fill="#f6f8fa" stroke="#d0d7de" stroke-width="1.2"/>
+<text x="262" y="310" font-family="-apple-system,'Segoe UI',Helvetica,Arial,sans-serif" font-size="11" font-weight="bold" fill="#59636e" text-anchor="start">CORE PACKAGES  (internal/)</text>
+<rect x="262.0" y="318" width="92" height="98" rx="6" fill="#fff8c5" stroke="#d4a72c" stroke-width="1.2"/>
+<text x="308.0" y="336" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="12.5" font-weight="bold" fill="#1f2328" text-anchor="middle">catalog</text>
+<text x="308.0" y="354.0" font-family="-apple-system,'Segoe UI',Helvetica,Arial,sans-serif" font-size="10" font-weight="normal" fill="#59636e" text-anchor="middle">catalog.yaml:</text>
+<text x="308.0" y="367.5" font-family="-apple-system,'Segoe UI',Helvetica,Arial,sans-serif" font-size="10" font-weight="normal" fill="#59636e" text-anchor="middle">severity, owner,</text>
+<text x="308.0" y="381.0" font-family="-apple-system,'Segoe UI',Helvetica,Arial,sans-serif" font-size="10" font-weight="normal" fill="#59636e" text-anchor="middle">deps, fix, docs,</text>
+<text x="308.0" y="394.5" font-family="-apple-system,'Segoe UI',Helvetica,Arial,sans-serif" font-size="10" font-weight="normal" fill="#59636e" text-anchor="middle">endpoints</text>
+<rect x="361.5" y="318" width="92" height="98" rx="6" fill="#fff8c5" stroke="#d4a72c" stroke-width="1.2"/>
+<text x="407.5" y="336" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="12.5" font-weight="bold" fill="#1f2328" text-anchor="middle">settings</text>
+<text x="407.5" y="354.0" font-family="-apple-system,'Segoe UI',Helvetica,Arial,sans-serif" font-size="10" font-weight="normal" fill="#59636e" text-anchor="middle">schema, env-var</text>
+<text x="407.5" y="367.5" font-family="-apple-system,'Segoe UI',Helvetica,Arial,sans-serif" font-size="10" font-weight="normal" fill="#59636e" text-anchor="middle">secret refs,</text>
+<text x="407.5" y="381.0" font-family="-apple-system,'Segoe UI',Helvetica,Arial,sans-serif" font-size="10" font-weight="normal" fill="#59636e" text-anchor="middle">rejects inline</text>
+<text x="407.5" y="394.5" font-family="-apple-system,'Segoe UI',Helvetica,Arial,sans-serif" font-size="10" font-weight="normal" fill="#59636e" text-anchor="middle">secrets</text>
+<rect x="461.0" y="318" width="92" height="98" rx="6" fill="#fff8c5" stroke="#d4a72c" stroke-width="1.2"/>
+<text x="507.0" y="336" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="12.5" font-weight="bold" fill="#1f2328" text-anchor="middle">engine</text>
+<text x="507.0" y="354.0" font-family="-apple-system,'Segoe UI',Helvetica,Arial,sans-serif" font-size="10" font-weight="normal" fill="#59636e" text-anchor="middle">topological levels</text>
+<text x="507.0" y="367.5" font-family="-apple-system,'Segoe UI',Helvetica,Arial,sans-serif" font-size="10" font-weight="normal" fill="#59636e" text-anchor="middle">run in parallel;</text>
+<text x="507.0" y="381.0" font-family="-apple-system,'Segoe UI',Helvetica,Arial,sans-serif" font-size="10" font-weight="normal" fill="#59636e" text-anchor="middle">scope-aware skips;</text>
+<text x="507.0" y="394.5" font-family="-apple-system,'Segoe UI',Helvetica,Arial,sans-serif" font-size="10" font-weight="normal" fill="#59636e" text-anchor="middle">per-check timeout</text>
+<rect x="560.5" y="318" width="92" height="98" rx="6" fill="#fff8c5" stroke="#d4a72c" stroke-width="1.2"/>
+<text x="606.5" y="336" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="12.5" font-weight="bold" fill="#1f2328" text-anchor="middle">checks</text>
+<text x="606.5" y="354.0" font-family="-apple-system,'Segoe UI',Helvetica,Arial,sans-serif" font-size="10" font-weight="normal" fill="#59636e" text-anchor="middle">one function per</text>
+<text x="606.5" y="367.5" font-family="-apple-system,'Segoe UI',Helvetica,Arial,sans-serif" font-size="10" font-weight="normal" fill="#59636e" text-anchor="middle">catalog ID;</text>
+<text x="606.5" y="381.0" font-family="-apple-system,'Segoe UI',Helvetica,Arial,sans-serif" font-size="10" font-weight="normal" fill="#59636e" text-anchor="middle">probe checks</text>
+<text x="606.5" y="394.5" font-family="-apple-system,'Segoe UI',Helvetica,Arial,sans-serif" font-size="10" font-weight="normal" fill="#59636e" text-anchor="middle">judge evidence</text>
+<rect x="660.0" y="318" width="92" height="98" rx="6" fill="#fff8c5" stroke="#d4a72c" stroke-width="1.2"/>
+<text x="706.0" y="336" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="12.5" font-weight="bold" fill="#1f2328" text-anchor="middle">model</text>
+<text x="706.0" y="354.0" font-family="-apple-system,'Segoe UI',Helvetica,Arial,sans-serif" font-size="10" font-weight="normal" fill="#59636e" text-anchor="middle">Result, Evidence,</text>
+<text x="706.0" y="367.5" font-family="-apple-system,'Segoe UI',Helvetica,Arial,sans-serif" font-size="10" font-weight="normal" fill="#59636e" text-anchor="middle">Status, Severity,</text>
+<text x="706.0" y="381.0" font-family="-apple-system,'Segoe UI',Helvetica,Arial,sans-serif" font-size="10" font-weight="normal" fill="#59636e" text-anchor="middle">Verdict, run ID</text>
+<rect x="759.5" y="318" width="92" height="98" rx="6" fill="#fff8c5" stroke="#d4a72c" stroke-width="1.2"/>
+<text x="805.5" y="336" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="12.5" font-weight="bold" fill="#1f2328" text-anchor="middle">kube</text>
+<text x="805.5" y="354.0" font-family="-apple-system,'Segoe UI',Helvetica,Arial,sans-serif" font-size="10" font-weight="normal" fill="#59636e" text-anchor="middle">client-go wrapper,</text>
+<text x="805.5" y="367.5" font-family="-apple-system,'Segoe UI',Helvetica,Arial,sans-serif" font-size="10" font-weight="normal" fill="#59636e" text-anchor="middle">MutationGuard,</text>
+<text x="805.5" y="381.0" font-family="-apple-system,'Segoe UI',Helvetica,Arial,sans-serif" font-size="10" font-weight="normal" fill="#59636e" text-anchor="middle">permission lists</text>
+<rect x="859.0" y="318" width="92" height="98" rx="6" fill="#fff8c5" stroke="#d4a72c" stroke-width="1.2"/>
+<text x="905.0" y="336" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="12.5" font-weight="bold" fill="#1f2328" text-anchor="middle">probe/*</text>
+<text x="905.0" y="354.0" font-family="-apple-system,'Segoe UI',Helvetica,Arial,sans-serif" font-size="10" font-weight="normal" fill="#59636e" text-anchor="middle">orchestrator,</text>
+<text x="905.0" y="367.5" font-family="-apple-system,'Segoe UI',Helvetica,Arial,sans-serif" font-size="10" font-weight="normal" fill="#59636e" text-anchor="middle">protocol, nettest,</text>
+<text x="905.0" y="381.0" font-family="-apple-system,'Segoe UI',Helvetica,Arial,sans-serif" font-size="10" font-weight="normal" fill="#59636e" text-anchor="middle">agent, sgx</text>
+<rect x="958.5" y="318" width="92" height="98" rx="6" fill="#fff8c5" stroke="#d4a72c" stroke-width="1.2"/>
+<text x="1004.5" y="336" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="12.5" font-weight="bold" fill="#1f2328" text-anchor="middle">redact</text>
+<text x="1004.5" y="354.0" font-family="-apple-system,'Segoe UI',Helvetica,Arial,sans-serif" font-size="10" font-weight="normal" fill="#59636e" text-anchor="middle">masks raw,</text>
+<text x="1004.5" y="367.5" font-family="-apple-system,'Segoe UI',Helvetica,Arial,sans-serif" font-size="10" font-weight="normal" fill="#59636e" text-anchor="middle">base64 and URL-</text>
+<text x="1004.5" y="381.0" font-family="-apple-system,'Segoe UI',Helvetica,Arial,sans-serif" font-size="10" font-weight="normal" fill="#59636e" text-anchor="middle">encoded secrets</text>
+<rect x="1058.0" y="318" width="92" height="98" rx="6" fill="#fff8c5" stroke="#d4a72c" stroke-width="1.2"/>
+<text x="1104.0" y="336" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="12.5" font-weight="bold" fill="#1f2328" text-anchor="middle">output</text>
+<text x="1104.0" y="354.0" font-family="-apple-system,'Segoe UI',Helvetica,Arial,sans-serif" font-size="10" font-weight="normal" fill="#59636e" text-anchor="middle">terminal, HTML,</text>
+<text x="1104.0" y="367.5" font-family="-apple-system,'Segoe UI',Helvetica,Arial,sans-serif" font-size="10" font-weight="normal" fill="#59636e" text-anchor="middle">JSON, CSV,</text>
+<text x="1104.0" y="381.0" font-family="-apple-system,'Segoe UI',Helvetica,Arial,sans-serif" font-size="10" font-weight="normal" fill="#59636e" text-anchor="middle">bundle</text>
+<rect x="252" y="434" width="896" height="136" rx="6" fill="#f6f8fa" stroke="#d0d7de" stroke-width="1.2"/>
+<text x="262" y="452" font-family="-apple-system,'Segoe UI',Helvetica,Arial,sans-serif" font-size="11" font-weight="bold" fill="#59636e" text-anchor="start">WHERE EACH CHECK RUNS  (catalog field runsIn)</text>
+<rect x="262.0" y="460" width="283" height="100" rx="6" fill="#ddf4ff" stroke="#54aeff" stroke-width="1.2"/>
+<text x="403.5" y="478" font-family="-apple-system,'Segoe UI',Helvetica,Arial,sans-serif" font-size="12.5" font-weight="bold" fill="#1f2328" text-anchor="middle">workstation  ·  23 checks</text>
+<text x="403.5" y="496" font-family="-apple-system,'Segoe UI',Helvetica,Arial,sans-serif" font-size="10.3" font-weight="normal" fill="#59636e" text-anchor="middle">read-only API calls + local tools, both modes</text>
+<text x="403.5" y="510" font-family="-apple-system,'Segoe UI',Helvetica,Arial,sans-serif" font-size="10.3" font-weight="normal" fill="#59636e" text-anchor="middle">WS-01, K8S-01..09, K8S-12, CC-01/02,</text>
+<text x="403.5" y="524" font-family="-apple-system,'Segoe UI',Helvetica,Arial,sans-serif" font-size="10.3" font-weight="normal" fill="#59636e" text-anchor="middle">NET-04/05, REG-01/02/04/05, BAK-01,</text>
+<text x="403.5" y="538" font-family="-apple-system,'Segoe UI',Helvetica,Arial,sans-serif" font-size="10.3" font-weight="normal" fill="#59636e" text-anchor="middle">PKI-01/02/03</text>
+<rect x="555.5" y="460" width="283" height="100" rx="6" fill="#fff1e5" stroke="#fb8f44" stroke-width="1.2"/>
+<text x="697.0" y="478" font-family="-apple-system,'Segoe UI',Helvetica,Arial,sans-serif" font-size="12.5" font-weight="bold" fill="#1f2328" text-anchor="middle">cluster-write  ·  2 checks</text>
+<text x="697.0" y="496" font-family="-apple-system,'Segoe UI',Helvetica,Arial,sans-serif" font-size="10.3" font-weight="normal" fill="#59636e" text-anchor="middle">cluster mode only, inside the run namespace</text>
+<text x="697.0" y="510" font-family="-apple-system,'Segoe UI',Helvetica,Arial,sans-serif" font-size="10.3" font-weight="normal" fill="#59636e" text-anchor="middle">K8S-10  test volume (1 GiB PVC)</text>
+<text x="697.0" y="524" font-family="-apple-system,'Segoe UI',Helvetica,Arial,sans-serif" font-size="10.3" font-weight="normal" fill="#59636e" text-anchor="middle">K8S-11  LoadBalancer Service gets an IP</text>
+<text x="697.0" y="538" font-family="-apple-system,'Segoe UI',Helvetica,Arial,sans-serif" font-size="10.3" font-weight="normal" fill="#59636e" text-anchor="middle"></text>
+<rect x="849.0" y="460" width="283" height="100" rx="6" fill="#dafbe1" stroke="#4ac26b" stroke-width="1.2"/>
+<text x="990.5" y="478" font-family="-apple-system,'Segoe UI',Helvetica,Arial,sans-serif" font-size="12.5" font-weight="bold" fill="#1f2328" text-anchor="middle">probe  ·  10 checks</text>
+<text x="990.5" y="496" font-family="-apple-system,'Segoe UI',Helvetica,Arial,sans-serif" font-size="10.3" font-weight="normal" fill="#59636e" text-anchor="middle">cluster mode only, from pods on each pool</text>
+<text x="990.5" y="510" font-family="-apple-system,'Segoe UI',Helvetica,Arial,sans-serif" font-size="10.3" font-weight="normal" fill="#59636e" text-anchor="middle">NET-01/02/03/06/07  DNS, TCP, TLS, syslog, clock</text>
+<text x="990.5" y="524" font-family="-apple-system,'Segoe UI',Helvetica,Arial,sans-serif" font-size="10.3" font-weight="normal" fill="#59636e" text-anchor="middle">CC-03/04  collateral + attestation reach</text>
+<text x="990.5" y="538" font-family="-apple-system,'Segoe UI',Helvetica,Arial,sans-serif" font-size="10.3" font-weight="normal" fill="#59636e" text-anchor="middle">CC-05 SGX quote · REG-03 images · BAK-02 blob</text>
+<g transform="translate(0,20)">
+<rect x="30" y="600" width="760" height="300" rx="10" fill="#f0f6ff" stroke="#54aeff" stroke-width="1.4"/>
+<text x="44" y="622" font-family="-apple-system,'Segoe UI',Helvetica,Arial,sans-serif" font-size="13" font-weight="bold" fill="#0550ae" text-anchor="start">CUSTOMER KUBERNETES CLUSTER  (AKS)</text>
+<rect x="44" y="634" width="200" height="112" rx="6" fill="#ffffff" stroke="#54aeff" stroke-width="1.2"/>
+<text x="144" y="654" font-family="-apple-system,'Segoe UI',Helvetica,Arial,sans-serif" font-size="12.5" font-weight="bold" fill="#1f2328" text-anchor="middle">Kubernetes API server</text>
+<text x="144" y="672" font-family="-apple-system,'Segoe UI',Helvetica,Arial,sans-serif" font-size="10.3" font-weight="normal" fill="#59636e" text-anchor="middle">reads: nodes, pods, CRDs,</text>
+<text x="144" y="686" font-family="-apple-system,'Segoe UI',Helvetica,Arial,sans-serif" font-size="10.3" font-weight="normal" fill="#59636e" text-anchor="middle">IngressClasses, issuers,</text>
+<text x="144" y="700" font-family="-apple-system,'Segoe UI',Helvetica,Arial,sans-serif" font-size="10.3" font-weight="normal" fill="#59636e" text-anchor="middle">SSAR permission checks</text>
+<text x="144" y="714" font-family="-apple-system,'Segoe UI',Helvetica,Arial,sans-serif" font-size="10.3" font-weight="normal" fill="#59636e" text-anchor="middle">audit log proves 0 writes</text>
+<text x="144" y="728" font-family="-apple-system,'Segoe UI',Helvetica,Arial,sans-serif" font-size="10.3" font-weight="normal" fill="#59636e" text-anchor="middle">in workstation mode</text>
+<rect x="44" y="758" width="200" height="130" rx="6" fill="#ffffff" stroke="#54aeff" stroke-width="1.2"/>
+<text x="144" y="778" font-family="-apple-system,'Segoe UI',Helvetica,Arial,sans-serif" font-size="12.5" font-weight="bold" fill="#1f2328" text-anchor="middle">Node pools</text>
+<text x="144" y="796" font-family="-apple-system,'Segoe UI',Helvetica,Arial,sans-serif" font-size="10.3" font-weight="normal" fill="#59636e" text-anchor="middle">system pool: ≥ 3 Linux nodes</text>
+<text x="144" y="810" font-family="-apple-system,'Segoe UI',Helvetica,Arial,sans-serif" font-size="10.3" font-weight="normal" fill="#59636e" text-anchor="middle">SGX pool: ≥ 3 DCsv3 nodes</text>
+<text x="144" y="824" font-family="-apple-system,'Segoe UI',Helvetica,Arial,sans-serif" font-size="10.3" font-weight="normal" fill="#59636e" text-anchor="middle">SGX device plugin + NFD</text>
+<text x="144" y="838" font-family="-apple-system,'Segoe UI',Helvetica,Arial,sans-serif" font-size="10.3" font-weight="normal" fill="#59636e" text-anchor="middle">ingress controller</text>
+<text x="144" y="852" font-family="-apple-system,'Segoe UI',Helvetica,Arial,sans-serif" font-size="10.3" font-weight="normal" fill="#59636e" text-anchor="middle">cert-manager + ClusterIssuer</text>
+<text x="144" y="866" font-family="-apple-system,'Segoe UI',Helvetica,Arial,sans-serif" font-size="10.3" font-weight="normal" fill="#59636e" text-anchor="middle">storage class, LoadBalancer</text>
+<rect x="262" y="634" width="514" height="254" rx="8" fill="#fff8f0" stroke="#fb8f44" stroke-width="1.5" stroke-dasharray="6 4"/>
+<text x="519" y="654" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="12.5" font-weight="bold" fill="#953800" text-anchor="middle">temporary namespace  armor-preflight-&lt;run id&gt;</text>
+<text x="519" y="671" font-family="-apple-system,'Segoe UI',Helvetica,Arial,sans-serif" font-size="10" font-weight="normal" fill="#953800" text-anchor="middle">PSS restricted enforced · labelled managed-by + run-id · deleted on exit, Ctrl-C, or by `cleanup`</text>
+<rect x="274" y="682" width="160" height="56" rx="6" fill="#ffffff" stroke="#fb8f44" stroke-width="1.2"/>
+<text x="354.0" y="700" font-family="-apple-system,'Segoe UI',Helvetica,Arial,sans-serif" font-size="12" font-weight="bold" fill="#1f2328" text-anchor="middle">ConfigMap</text>
+<text x="354.0" y="716" font-family="-apple-system,'Segoe UI',Helvetica,Arial,sans-serif" font-size="10" font-weight="normal" fill="#59636e" text-anchor="middle">probe request: endpoints,</text>
+<text x="354.0" y="729" font-family="-apple-system,'Segoe UI',Helvetica,Arial,sans-serif" font-size="10" font-weight="normal" fill="#59636e" text-anchor="middle">images, timeouts</text>
+<rect x="444" y="682" width="160" height="56" rx="6" fill="#ffffff" stroke="#fb8f44" stroke-width="1.2"/>
+<text x="524.0" y="700" font-family="-apple-system,'Segoe UI',Helvetica,Arial,sans-serif" font-size="12" font-weight="bold" fill="#1f2328" text-anchor="middle">Secret</text>
+<text x="524.0" y="716" font-family="-apple-system,'Segoe UI',Helvetica,Arial,sans-serif" font-size="10" font-weight="normal" fill="#59636e" text-anchor="middle">registry password,</text>
+<text x="524.0" y="729" font-family="-apple-system,'Segoe UI',Helvetica,Arial,sans-serif" font-size="10" font-weight="normal" fill="#59636e" text-anchor="middle">storage credential (D-3)</text>
+<rect x="614" y="682" width="150" height="56" rx="6" fill="#ffffff" stroke="#fb8f44" stroke-width="1.2"/>
+<text x="689.0" y="700" font-family="-apple-system,'Segoe UI',Helvetica,Arial,sans-serif" font-size="12" font-weight="bold" fill="#1f2328" text-anchor="middle">PVC + Service</text>
+<text x="689.0" y="716" font-family="-apple-system,'Segoe UI',Helvetica,Arial,sans-serif" font-size="10" font-weight="normal" fill="#59636e" text-anchor="middle">K8S-10 volume,</text>
+<text x="689.0" y="729" font-family="-apple-system,'Segoe UI',Helvetica,Arial,sans-serif" font-size="10" font-weight="normal" fill="#59636e" text-anchor="middle">K8S-11 LoadBalancer</text>
+<rect x="274" y="750" width="240" height="76" rx="6" fill="#dafbe1" stroke="#4ac26b" stroke-width="1.2"/>
+<text x="394.0" y="768" font-family="-apple-system,'Segoe UI',Helvetica,Arial,sans-serif" font-size="12" font-weight="bold" fill="#116329" text-anchor="middle">probe pod  × each node pool</text>
+<text x="394.0" y="785.0" font-family="-apple-system,'Segoe UI',Helvetica,Arial,sans-serif" font-size="10" font-weight="normal" fill="#1a4d2a" text-anchor="middle">~2 MB static Go on distroless, UID 65532,</text>
+<text x="394.0" y="798.5" font-family="-apple-system,'Segoe UI',Helvetica,Arial,sans-serif" font-size="10" font-weight="normal" fill="#1a4d2a" text-anchor="middle">read-only rootfs, no caps, no SA token,</text>
+<text x="394.0" y="812.0" font-family="-apple-system,'Segoe UI',Helvetica,Arial,sans-serif" font-size="10" font-weight="normal" fill="#1a4d2a" text-anchor="middle">nettest: DNS → TCP → TLS → HTTP</text>
+<rect x="524" y="750" width="240" height="76" rx="6" fill="#dafbe1" stroke="#4ac26b" stroke-width="1.2"/>
+<text x="644.0" y="768" font-family="-apple-system,'Segoe UI',Helvetica,Arial,sans-serif" font-size="12" font-weight="bold" fill="#116329" text-anchor="middle">SGX probe pod  × each SGX node</text>
+<text x="644.0" y="785.0" font-family="-apple-system,'Segoe UI',Helvetica,Arial,sans-serif" font-size="10" font-weight="normal" fill="#1a4d2a" text-anchor="middle">--sgx-probe-image (Fortanix-built),</text>
+<text x="644.0" y="798.5" font-family="-apple-system,'Segoe UI',Helvetica,Arial,sans-serif" font-size="10" font-weight="normal" fill="#1a4d2a" text-anchor="middle">sgx.intel.com/enclave + provision,</text>
+<text x="644.0" y="812.0" font-family="-apple-system,'Segoe UI',Helvetica,Arial,sans-serif" font-size="10" font-weight="normal" fill="#1a4d2a" text-anchor="middle">quote with nonce → verify (CC-05)</text>
+<text x="519" y="848" font-family="-apple-system,'Segoe UI',Helvetica,Arial,sans-serif" font-size="10.3" font-weight="normal" fill="#59636e" text-anchor="middle">each probe prints one JSON line (ARMOR-PREFLIGHT-RESULT …) to its log;</text>
+<text x="519" y="862" font-family="-apple-system,'Segoe UI',Helvetica,Arial,sans-serif" font-size="10.3" font-weight="normal" fill="#59636e" text-anchor="middle">the CLI reads pods/log and decides pass / fail — probes only report raw evidence</text>
+<text x="519" y="878" font-family="-apple-system,'Segoe UI',Helvetica,Arial,sans-serif" font-size="10.3" font-weight="normal" fill="#59636e" text-anchor="middle" font-style="italic">unpullable probe image → the exact digest to mirror is named; workstation checks still complete</text>
+<rect x="810" y="600" width="560" height="300" rx="10" fill="#f0fff4" stroke="#4ac26b" stroke-width="1.4"/>
+<text x="824" y="622" font-family="-apple-system,'Segoe UI',Helvetica,Arial,sans-serif" font-size="13" font-weight="bold" fill="#116329" text-anchor="start">ENDPOINTS UNDER TEST  (catalog endpoints + settings)</text>
+<rect x="824" y="636" width="532" height="28" rx="5" fill="#ffffff" stroke="#aceebb" stroke-width="1.2"/>
+<text x="834" y="654" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11" font-weight="bold" fill="#1f2328" text-anchor="start">cr.download.fortanix.com</text>
+<text x="1080" y="654" font-family="-apple-system,'Segoe UI',Helvetica,Arial,sans-serif" font-size="10.5" font-weight="normal" fill="#59636e" text-anchor="start">Armor images + Helm charts</text>
+<text x="1346" y="654" font-family="-apple-system,'Segoe UI',Helvetica,Arial,sans-serif" font-size="10" font-weight="normal" fill="#116329" text-anchor="end">NET-02 · REG-01/02/03</text>
+<rect x="824" y="667" width="532" height="28" rx="5" fill="#ffffff" stroke="#aceebb" stroke-width="1.2"/>
+<text x="834" y="685" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11" font-weight="bold" fill="#1f2328" text-anchor="start">pccs.fortanix.com</text>
+<text x="1080" y="685" font-family="-apple-system,'Segoe UI',Helvetica,Arial,sans-serif" font-size="10.5" font-weight="normal" fill="#59636e" text-anchor="start">SGX DCAP collateral (Fortanix)</text>
+<text x="1346" y="685" font-family="-apple-system,'Segoe UI',Helvetica,Arial,sans-serif" font-size="10" font-weight="normal" fill="#116329" text-anchor="end">CC-03 · NET-02</text>
+<rect x="824" y="698" width="532" height="28" rx="5" fill="#ffffff" stroke="#aceebb" stroke-width="1.2"/>
+<text x="834" y="716" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11" font-weight="bold" fill="#1f2328" text-anchor="start">global.acccache.azure.net</text>
+<text x="1080" y="716" font-family="-apple-system,'Segoe UI',Helvetica,Arial,sans-serif" font-size="10.5" font-weight="normal" fill="#59636e" text-anchor="start">SGX DCAP collateral (Azure)</text>
+<text x="1346" y="716" font-family="-apple-system,'Segoe UI',Helvetica,Arial,sans-serif" font-size="10" font-weight="normal" fill="#116329" text-anchor="end">CC-03 · NET-02</text>
+<rect x="824" y="729" width="532" height="28" rx="5" fill="#ffffff" stroke="#aceebb" stroke-width="1.2"/>
+<text x="834" y="747" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11" font-weight="bold" fill="#1f2328" text-anchor="start">api.trustedservices.intel.com</text>
+<text x="1080" y="747" font-family="-apple-system,'Segoe UI',Helvetica,Arial,sans-serif" font-size="10.5" font-weight="normal" fill="#59636e" text-anchor="start">Intel Trust Authority</text>
+<text x="1346" y="747" font-family="-apple-system,'Segoe UI',Helvetica,Arial,sans-serif" font-size="10" font-weight="normal" fill="#116329" text-anchor="end">CC-04 · NET-02</text>
+<rect x="824" y="760" width="532" height="28" rx="5" fill="#ffffff" stroke="#aceebb" stroke-width="1.2"/>
+<text x="834" y="778" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11" font-weight="bold" fill="#1f2328" text-anchor="start">&lt;azureAttestationHost&gt;</text>
+<text x="1080" y="778" font-family="-apple-system,'Segoe UI',Helvetica,Arial,sans-serif" font-size="10.5" font-weight="normal" fill="#59636e" text-anchor="start">Azure Attestation (regional)</text>
+<text x="1346" y="778" font-family="-apple-system,'Segoe UI',Helvetica,Arial,sans-serif" font-size="10" font-weight="normal" fill="#116329" text-anchor="end">CC-04 · NET-02</text>
+<rect x="824" y="791" width="532" height="28" rx="5" fill="#ffffff" stroke="#aceebb" stroke-width="1.2"/>
+<text x="834" y="809" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11" font-weight="bold" fill="#1f2328" text-anchor="start">&lt;storage.accountFqdn&gt;</text>
+<text x="1080" y="809" font-family="-apple-system,'Segoe UI',Helvetica,Arial,sans-serif" font-size="10.5" font-weight="normal" fill="#59636e" text-anchor="start">Azure Blob, Cassandra backups</text>
+<text x="1346" y="809" font-family="-apple-system,'Segoe UI',Helvetica,Arial,sans-serif" font-size="10" font-weight="normal" fill="#116329" text-anchor="end">BAK-02 · NET-02</text>
+<rect x="824" y="822" width="532" height="28" rx="5" fill="#ffffff" stroke="#aceebb" stroke-width="1.2"/>
+<text x="834" y="840" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11" font-weight="bold" fill="#1f2328" text-anchor="start">&lt;syslog.host&gt;:&lt;port&gt;</text>
+<text x="1080" y="840" font-family="-apple-system,'Segoe UI',Helvetica,Arial,sans-serif" font-size="10.5" font-weight="normal" fill="#59636e" text-anchor="start">audit log export (TCP only)</text>
+<text x="1346" y="840" font-family="-apple-system,'Segoe UI',Helvetica,Arial,sans-serif" font-size="10" font-weight="normal" fill="#116329" text-anchor="end">NET-06</text>
+<rect x="824" y="853" width="532" height="28" rx="5" fill="#ffffff" stroke="#aceebb" stroke-width="1.2"/>
+<text x="834" y="871" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11" font-weight="bold" fill="#1f2328" text-anchor="start">your mirror registry</text>
+<text x="1080" y="871" font-family="-apple-system,'Segoe UI',Helvetica,Arial,sans-serif" font-size="10.5" font-weight="normal" fill="#59636e" text-anchor="start">mirror mode image digests</text>
+<text x="1346" y="871" font-family="-apple-system,'Segoe UI',Helvetica,Arial,sans-serif" font-size="10" font-weight="normal" fill="#116329" text-anchor="end">REG-04</text>
+<text x="1090" y="896" font-family="-apple-system,'Segoe UI',Helvetica,Arial,sans-serif" font-size="10" font-weight="normal" fill="#59636e" text-anchor="middle" font-style="italic">every TLS connection is verified; a request is only sent after the chain verifies (NET-03)</text>
+<line x1="430" y1="560" x2="430" y2="598" stroke="#0969da" stroke-width="1.6" marker-end="url(#ahb)"/>
+<text x="438" y="584" font-family="-apple-system,'Segoe UI',Helvetica,Arial,sans-serif" font-size="10" font-weight="normal" fill="#0969da" text-anchor="start">reads + permission checks (SSAR)</text>
+<line x1="700" y1="560" x2="700" y2="598" stroke="#0969da" stroke-width="1.6" marker-end="url(#ahb)" stroke-dasharray="5 3"/>
+<text x="708" y="584" font-family="-apple-system,'Segoe UI',Helvetica,Arial,sans-serif" font-size="10" font-weight="normal" fill="#0969da" text-anchor="start">cluster mode: create, watch, delete</text>
+<line x1="1000" y1="560" x2="1000" y2="598" stroke="#1a7f37" stroke-width="1.6" marker-end="url(#ahg)" stroke-dasharray="5 3"/>
+<text x="1008" y="584" font-family="-apple-system,'Segoe UI',Helvetica,Arial,sans-serif" font-size="10" font-weight="normal" fill="#1a7f37" text-anchor="start">workstation: REG-01/02/04, NET-05</text>
+<line x1="764" y1="790" x2="822" y2="760" stroke="#1a7f37" stroke-width="1.8" marker-end="url(#ahg)"/>
+</g>
+<g transform="translate(0,20)">
+<text x="30" y="928" font-family="-apple-system,'Segoe UI',Helvetica,Arial,sans-serif" font-size="12" font-weight="bold" fill="#59636e" text-anchor="start">VERDICT AND EXIT CODE</text>
+<rect x="30.0" y="938" width="325" height="54" rx="8" fill="#dafbe1" stroke="#4ac26b" stroke-width="1.2"/>
+<text x="44.0" y="960" font-family="-apple-system,'Segoe UI',Helvetica,Arial,sans-serif" font-size="13" font-weight="bold" fill="#116329" text-anchor="start">READY</text>
+<text x="341.0" y="960" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="12" font-weight="bold" fill="#116329" text-anchor="end">exit 0</text>
+<text x="44.0" y="980" font-family="-apple-system,'Segoe UI',Helvetica,Arial,sans-serif" font-size="10.8" font-weight="normal" fill="#116329" text-anchor="start">no blocker failed, nothing warned</text>
+<rect x="367.6" y="938" width="325" height="54" rx="8" fill="#fff8c5" stroke="#d4a72c" stroke-width="1.2"/>
+<text x="381.6" y="960" font-family="-apple-system,'Segoe UI',Helvetica,Arial,sans-serif" font-size="13" font-weight="bold" fill="#7d4e00" text-anchor="start">READY WITH WARNINGS</text>
+<text x="678.6" y="960" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="12" font-weight="bold" fill="#7d4e00" text-anchor="end">exit 1</text>
+<text x="381.6" y="980" font-family="-apple-system,'Segoe UI',Helvetica,Arial,sans-serif" font-size="10.8" font-weight="normal" fill="#7d4e00" text-anchor="start">no blocker failed, ≥ 1 warning</text>
+<rect x="705.2" y="938" width="325" height="54" rx="8" fill="#ffebe9" stroke="#ff8182" stroke-width="1.2"/>
+<text x="719.2" y="960" font-family="-apple-system,'Segoe UI',Helvetica,Arial,sans-serif" font-size="13" font-weight="bold" fill="#82071e" text-anchor="start">NOT READY</text>
+<text x="1016.2" y="960" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="12" font-weight="bold" fill="#82071e" text-anchor="end">exit 2</text>
+<text x="719.2" y="980" font-family="-apple-system,'Segoe UI',Helvetica,Arial,sans-serif" font-size="10.8" font-weight="normal" fill="#82071e" text-anchor="start">at least one blocker check failed</text>
+<rect x="1042.8000000000002" y="938" width="325" height="54" rx="8" fill="#eaeef2" stroke="#8c959f" stroke-width="1.2"/>
+<text x="1056.8000000000002" y="960" font-family="-apple-system,'Segoe UI',Helvetica,Arial,sans-serif" font-size="13" font-weight="bold" fill="#424a53" text-anchor="start">Preflight failed</text>
+<text x="1353.8000000000002" y="960" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="12" font-weight="bold" fill="#424a53" text-anchor="end">exit 3</text>
+<text x="1056.8000000000002" y="980" font-family="-apple-system,'Segoe UI',Helvetica,Arial,sans-serif" font-size="10.8" font-weight="normal" fill="#424a53" text-anchor="start">bad settings, uncovered Armor version, internal error</text>
+<text x="30" y="1016" font-family="-apple-system,'Segoe UI',Helvetica,Arial,sans-serif" font-size="12" font-weight="bold" fill="#59636e" text-anchor="start">ENGINE RULES</text>
+<text x="30" y="1036" font-family="-apple-system,'Segoe UI',Helvetica,Arial,sans-serif" font-size="11.5" font-weight="normal" fill="#1f2328" text-anchor="start">•  Checks run in dependency order; each level runs in parallel with a per-check timeout (default 10 s). A timeout is a fail, never a pass.</text>
+<text x="30" y="1056" font-family="-apple-system,'Segoe UI',Helvetica,Arial,sans-serif" font-size="11.5" font-weight="normal" fill="#1f2328" text-anchor="start">•  A failed or skipped parent skips its children and names the parent (e.g. CC-05 names REG-03). Skips are per node pool: a failure on one pool never hides another.</text>
+<text x="30" y="1076" font-family="-apple-system,'Segoe UI',Helvetica,Arial,sans-serif" font-size="11.5" font-weight="normal" fill="#1f2328" text-anchor="start">•  Warning-severity checks report warn, not fail. Missing settings or env vars skip a check and name what is missing. Every result carries evidence, fix, owning team and doc link.</text>
+<rect x="30" y="1094" width="14" height="14" rx="3" fill="#ddf4ff" stroke="#54aeff" stroke-width="1.2"/>
+<text x="50" y="1105" font-family="-apple-system,'Segoe UI',Helvetica,Arial,sans-serif" font-size="11" font-weight="normal" fill="#59636e" text-anchor="start">run step / workstation check</text>
+<rect x="274.79999999999995" y="1094" width="14" height="14" rx="3" fill="#fff1e5" stroke="#fb8f44" stroke-width="1.2"/>
+<text x="294.79999999999995" y="1105" font-family="-apple-system,'Segoe UI',Helvetica,Arial,sans-serif" font-size="11" font-weight="normal" fill="#59636e" text-anchor="start">cluster-mode write</text>
+<rect x="453.59999999999997" y="1094" width="14" height="14" rx="3" fill="#fff8c5" stroke="#d4a72c" stroke-width="1.2"/>
+<text x="473.59999999999997" y="1105" font-family="-apple-system,'Segoe UI',Helvetica,Arial,sans-serif" font-size="11" font-weight="normal" fill="#59636e" text-anchor="start">core package</text>
+<rect x="592.8" y="1094" width="14" height="14" rx="3" fill="#dafbe1" stroke="#4ac26b" stroke-width="1.2"/>
+<text x="612.8" y="1105" font-family="-apple-system,'Segoe UI',Helvetica,Arial,sans-serif" font-size="11" font-weight="normal" fill="#59636e" text-anchor="start">probe / endpoint</text>
+</g>
+</svg>

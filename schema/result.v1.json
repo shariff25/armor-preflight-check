@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://github.com/shariff25/agent-goverance-OS/armor-preflight/schema/result.v1.json",
+  "$id": "https://github.com/shariff25/armor-preflight-check/schema/result.v1.json",
   "title": "Armor Preflight result, schema version 1",
   "description": "Written to result.json by every run. Within version 1, fields may be added but never removed or renamed; consumers must ignore fields they do not know.",
   "type": "object",

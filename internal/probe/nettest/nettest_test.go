@@ -11,8 +11,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/shariff25/agent-goverance-OS/armor-preflight/internal/netfixtures"
-	"github.com/shariff25/agent-goverance-OS/armor-preflight/internal/probe/protocol"
+	"github.com/shariff25/armor-preflight-check/internal/netfixtures"
+	"github.com/shariff25/armor-preflight-check/internal/probe/protocol"
 )
 
 const registry = "cr.download.fortanix.com"

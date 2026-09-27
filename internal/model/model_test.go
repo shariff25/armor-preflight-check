@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/shariff25/agent-goverance-OS/armor-preflight/internal/exitcode"
+	"github.com/shariff25/armor-preflight-check/internal/exitcode"
 )
 
 func res(sev Severity, st Status) Result { return Result{Severity: sev, Status: st} }

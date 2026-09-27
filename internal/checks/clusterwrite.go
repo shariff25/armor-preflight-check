@@ -12,10 +12,10 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
 
-	"github.com/shariff25/agent-goverance-OS/armor-preflight/internal/catalog"
-	"github.com/shariff25/agent-goverance-OS/armor-preflight/internal/engine"
-	"github.com/shariff25/agent-goverance-OS/armor-preflight/internal/model"
-	"github.com/shariff25/agent-goverance-OS/armor-preflight/internal/probe/orchestrator"
+	"github.com/shariff25/armor-preflight-check/internal/catalog"
+	"github.com/shariff25/armor-preflight-check/internal/engine"
+	"github.com/shariff25/armor-preflight-check/internal/model"
+	"github.com/shariff25/armor-preflight-check/internal/probe/orchestrator"
 )
 
 // Names of the test objects K8S-10 and K8S-11 create in the run namespace.

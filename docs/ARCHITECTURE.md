@@ -453,7 +453,7 @@ the probe Secret while a cluster-mode run lasts.
 
 ## 14. Testing and CI
 
-The CI workflow (`.github/workflows/armor-preflight.yml`) runs on every change under `armor-preflight/`:
+The CI workflow (`.github/workflows/armor-preflight.yml`) runs on every push and pull request:
 
 | Job | What it proves |
 |---|---|

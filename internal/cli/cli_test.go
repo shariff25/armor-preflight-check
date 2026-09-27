@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/shariff25/agent-goverance-OS/armor-preflight/internal/exitcode"
+	"github.com/shariff25/armor-preflight-check/internal/exitcode"
 )
 
 func execute(args ...string) (string, error) {

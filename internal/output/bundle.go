@@ -12,7 +12,7 @@ import (
 	"regexp"
 	"time"
 
-	"github.com/shariff25/agent-goverance-OS/armor-preflight/internal/redact"
+	"github.com/shariff25/armor-preflight-check/internal/redact"
 )
 
 // BundleEntry is one file in the support bundle.

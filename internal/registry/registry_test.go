@@ -9,7 +9,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/shariff25/agent-goverance-OS/armor-preflight/internal/registry/registrytest"
+	"github.com/shariff25/armor-preflight-check/internal/registry/registrytest"
 )
 
 const d1 = "sha256:1111111111111111111111111111111111111111111111111111111111111111"

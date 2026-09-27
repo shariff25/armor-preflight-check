@@ -9,10 +9,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/shariff25/agent-goverance-OS/armor-preflight/internal/catalog"
-	"github.com/shariff25/agent-goverance-OS/armor-preflight/internal/engine"
-	"github.com/shariff25/agent-goverance-OS/armor-preflight/internal/fsutil"
-	"github.com/shariff25/agent-goverance-OS/armor-preflight/internal/model"
+	"github.com/shariff25/armor-preflight-check/internal/catalog"
+	"github.com/shariff25/armor-preflight-check/internal/engine"
+	"github.com/shariff25/armor-preflight-check/internal/fsutil"
+	"github.com/shariff25/armor-preflight-check/internal/model"
 )
 
 var fqdnRE = regexp.MustCompile(`^(?i)([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$`)

@@ -4,9 +4,9 @@ import (
 	"fmt"
 	"regexp"
 
-	"github.com/shariff25/agent-goverance-OS/armor-preflight/internal/catalog"
-	"github.com/shariff25/agent-goverance-OS/armor-preflight/internal/engine"
-	"github.com/shariff25/agent-goverance-OS/armor-preflight/internal/model"
+	"github.com/shariff25/armor-preflight-check/internal/catalog"
+	"github.com/shariff25/armor-preflight-check/internal/engine"
+	"github.com/shariff25/armor-preflight-check/internal/model"
 )
 
 func ev(stage, target string, ok bool, format string, args ...any) model.Evidence {

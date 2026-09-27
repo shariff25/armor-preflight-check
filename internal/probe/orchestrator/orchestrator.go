@@ -15,7 +15,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 
-	"github.com/shariff25/agent-goverance-OS/armor-preflight/internal/probe/protocol"
+	"github.com/shariff25/armor-preflight-check/internal/probe/protocol"
 )
 
 // MaxLogBytes caps how much of a probe's log is read, so a misbehaving or

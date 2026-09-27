@@ -9,9 +9,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/shariff25/agent-goverance-OS/armor-preflight/internal/catalog"
-	"github.com/shariff25/agent-goverance-OS/armor-preflight/internal/model"
-	"github.com/shariff25/agent-goverance-OS/armor-preflight/internal/settings"
+	"github.com/shariff25/armor-preflight-check/internal/catalog"
+	"github.com/shariff25/armor-preflight-check/internal/model"
+	"github.com/shariff25/armor-preflight-check/internal/settings"
 )
 
 const fullSettings = `armorVersion: "1.0.404"

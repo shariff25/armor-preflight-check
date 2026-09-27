@@ -15,7 +15,7 @@ import (
 
 	"sigs.k8s.io/yaml"
 
-	"github.com/shariff25/agent-goverance-OS/armor-preflight/internal/fsutil"
+	"github.com/shariff25/armor-preflight-check/internal/fsutil"
 )
 
 // Settings mirrors the settings file. Fields marked (D-n) are additions

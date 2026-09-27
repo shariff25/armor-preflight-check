@@ -3,7 +3,7 @@ package catalog
 import (
 	"testing"
 
-	"github.com/shariff25/agent-goverance-OS/armor-preflight/internal/settings"
+	"github.com/shariff25/armor-preflight-check/internal/settings"
 )
 
 func TestResolveEndpoints(t *testing.T) {

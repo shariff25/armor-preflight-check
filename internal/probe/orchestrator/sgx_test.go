@@ -14,7 +14,7 @@ import (
 	psaapi "k8s.io/pod-security-admission/api"
 	"k8s.io/pod-security-admission/policy"
 
-	"github.com/shariff25/agent-goverance-OS/armor-preflight/internal/probe/protocol"
+	"github.com/shariff25/armor-preflight-check/internal/probe/protocol"
 )
 
 const sgxImage = "example.invalid/armor-preflight-probe-sgx@sha256:def"

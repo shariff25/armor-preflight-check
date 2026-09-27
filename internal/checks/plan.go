@@ -3,9 +3,9 @@ package checks
 import (
 	"fmt"
 
-	"github.com/shariff25/agent-goverance-OS/armor-preflight/internal/engine"
-	"github.com/shariff25/agent-goverance-OS/armor-preflight/internal/fsutil"
-	"github.com/shariff25/agent-goverance-OS/armor-preflight/internal/probe/protocol"
+	"github.com/shariff25/armor-preflight-check/internal/engine"
+	"github.com/shariff25/armor-preflight-check/internal/fsutil"
+	"github.com/shariff25/armor-preflight-check/internal/probe/protocol"
 )
 
 // ProbePlan is what the probes are asked to do.

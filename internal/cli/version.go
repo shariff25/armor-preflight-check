@@ -6,9 +6,9 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/shariff25/agent-goverance-OS/armor-preflight/internal/buildinfo"
-	"github.com/shariff25/agent-goverance-OS/armor-preflight/internal/catalog"
-	"github.com/shariff25/agent-goverance-OS/armor-preflight/internal/exitcode"
+	"github.com/shariff25/armor-preflight-check/internal/buildinfo"
+	"github.com/shariff25/armor-preflight-check/internal/catalog"
+	"github.com/shariff25/armor-preflight-check/internal/exitcode"
 )
 
 func newVersionCmd() *cobra.Command {

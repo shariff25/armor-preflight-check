@@ -7,10 +7,10 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/shariff25/agent-goverance-OS/armor-preflight/internal/catalog"
-	"github.com/shariff25/agent-goverance-OS/armor-preflight/internal/engine"
-	"github.com/shariff25/agent-goverance-OS/armor-preflight/internal/model"
-	"github.com/shariff25/agent-goverance-OS/armor-preflight/internal/redact"
+	"github.com/shariff25/armor-preflight-check/internal/catalog"
+	"github.com/shariff25/armor-preflight-check/internal/engine"
+	"github.com/shariff25/armor-preflight-check/internal/model"
+	"github.com/shariff25/armor-preflight-check/internal/redact"
 )
 
 // net04: proxy settings are consistent and NO_PROXY covers the cluster

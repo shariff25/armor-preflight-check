@@ -1,5 +1,5 @@
 // Package buildinfo holds values stamped into the binary at release time
-// with -ldflags "-X github.com/shariff25/agent-goverance-OS/armor-preflight/internal/buildinfo.Version=...".
+// with -ldflags "-X github.com/shariff25/armor-preflight-check/internal/buildinfo.Version=...".
 package buildinfo
 
 var (

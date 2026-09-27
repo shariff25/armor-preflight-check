@@ -1,4 +1,4 @@
-module github.com/shariff25/agent-goverance-OS/armor-preflight
+module github.com/shariff25/armor-preflight-check
 
 go 1.26.8
 

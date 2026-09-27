@@ -37,9 +37,9 @@ export PROBE_IMAGE
 if $snapshot; then
   goreleaser release --clean --snapshot
 else
-  # Tags in this repository carry a prefix (armor-preflight/v1.2.3), which
-  # goreleaser can't parse, so the version is passed in and the tag checks
-  # are skipped. The release workflow has already matched VERSION to the tag.
+  # The version is passed in and goreleaser's tag checks are skipped: the
+  # release workflow has already matched VERSION to the tag (vX.Y.Z), and
+  # it drafts the GitHub release itself.
   GORELEASER_CURRENT_TAG=v$VERSION goreleaser release --clean --skip=publish,validate
 fi
 

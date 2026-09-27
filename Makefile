@@ -1,4 +1,4 @@
-PKG      := github.com/shariff25/agent-goverance-OS/armor-preflight
+PKG      := github.com/shariff25/armor-preflight-check
 VERSION  ?= 0.1.0-dev
 COMMIT   ?= $(shell git rev-parse --short HEAD 2>/dev/null || echo unknown)
 DATE     ?= $(shell date -u +%Y-%m-%dT%H:%M:%SZ)

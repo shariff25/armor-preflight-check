@@ -11,7 +11,7 @@ import (
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
 
-	"github.com/shariff25/agent-goverance-OS/armor-preflight/internal/redact"
+	"github.com/shariff25/armor-preflight-check/internal/redact"
 )
 
 // Clients are the API clients checks use.

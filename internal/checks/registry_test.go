@@ -3,7 +3,7 @@ package checks
 import (
 	"testing"
 
-	"github.com/shariff25/agent-goverance-OS/armor-preflight/internal/catalog"
+	"github.com/shariff25/armor-preflight-check/internal/catalog"
 )
 
 // The registered checks and the catalog are the same set, so a catalog

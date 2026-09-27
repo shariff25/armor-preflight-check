@@ -5,7 +5,7 @@ import (
 	"io"
 	"strings"
 
-	"github.com/shariff25/agent-goverance-OS/armor-preflight/internal/model"
+	"github.com/shariff25/armor-preflight-check/internal/model"
 )
 
 // WriteTerminal prints the summary: the verdict, counts per area, each

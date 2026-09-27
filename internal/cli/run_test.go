@@ -9,12 +9,12 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/shariff25/agent-goverance-OS/armor-preflight/internal/catalog"
-	"github.com/shariff25/agent-goverance-OS/armor-preflight/internal/engine"
-	"github.com/shariff25/agent-goverance-OS/armor-preflight/internal/exitcode"
-	"github.com/shariff25/agent-goverance-OS/armor-preflight/internal/kube"
-	"github.com/shariff25/agent-goverance-OS/armor-preflight/internal/model"
-	"github.com/shariff25/agent-goverance-OS/armor-preflight/internal/output"
+	"github.com/shariff25/armor-preflight-check/internal/catalog"
+	"github.com/shariff25/armor-preflight-check/internal/engine"
+	"github.com/shariff25/armor-preflight-check/internal/exitcode"
+	"github.com/shariff25/armor-preflight-check/internal/kube"
+	"github.com/shariff25/armor-preflight-check/internal/model"
+	"github.com/shariff25/armor-preflight-check/internal/output"
 )
 
 const settingsYAML = `armorVersion: "1.0.404"

@@ -5,8 +5,8 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/shariff25/agent-goverance-OS/armor-preflight/internal/catalog"
-	"github.com/shariff25/agent-goverance-OS/armor-preflight/internal/model"
+	"github.com/shariff25/armor-preflight-check/internal/catalog"
+	"github.com/shariff25/armor-preflight-check/internal/model"
 )
 
 // blockSet records where a check's parents failed or were skipped. A parent

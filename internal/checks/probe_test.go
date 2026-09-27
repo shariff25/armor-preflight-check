@@ -12,14 +12,14 @@ import (
 	"testing"
 	"time"
 
-	"github.com/shariff25/agent-goverance-OS/armor-preflight/internal/catalog"
-	"github.com/shariff25/agent-goverance-OS/armor-preflight/internal/engine"
-	"github.com/shariff25/agent-goverance-OS/armor-preflight/internal/model"
-	"github.com/shariff25/agent-goverance-OS/armor-preflight/internal/netfixtures"
-	"github.com/shariff25/agent-goverance-OS/armor-preflight/internal/output"
-	"github.com/shariff25/agent-goverance-OS/armor-preflight/internal/probe/agent"
-	"github.com/shariff25/agent-goverance-OS/armor-preflight/internal/probe/protocol"
-	"github.com/shariff25/agent-goverance-OS/armor-preflight/internal/settings"
+	"github.com/shariff25/armor-preflight-check/internal/catalog"
+	"github.com/shariff25/armor-preflight-check/internal/engine"
+	"github.com/shariff25/armor-preflight-check/internal/model"
+	"github.com/shariff25/armor-preflight-check/internal/netfixtures"
+	"github.com/shariff25/armor-preflight-check/internal/output"
+	"github.com/shariff25/armor-preflight-check/internal/probe/agent"
+	"github.com/shariff25/armor-preflight-check/internal/probe/protocol"
+	"github.com/shariff25/armor-preflight-check/internal/settings"
 )
 
 const (

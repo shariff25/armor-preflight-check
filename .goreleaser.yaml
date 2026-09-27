@@ -16,10 +16,10 @@ builds:
     mod_timestamp: "{{ .CommitTimestamp }}"
     ldflags:
       - -s -w
-      - -X github.com/shariff25/agent-goverance-OS/armor-preflight/internal/buildinfo.Version={{ .Version }}
-      - -X github.com/shariff25/agent-goverance-OS/armor-preflight/internal/buildinfo.Commit={{ .ShortCommit }}
-      - -X github.com/shariff25/agent-goverance-OS/armor-preflight/internal/buildinfo.Date={{ .CommitDate }}
-      - -X github.com/shariff25/agent-goverance-OS/armor-preflight/internal/buildinfo.ProbeImage={{ .Env.PROBE_IMAGE }}
+      - -X github.com/shariff25/armor-preflight-check/internal/buildinfo.Version={{ .Version }}
+      - -X github.com/shariff25/armor-preflight-check/internal/buildinfo.Commit={{ .ShortCommit }}
+      - -X github.com/shariff25/armor-preflight-check/internal/buildinfo.Date={{ .CommitDate }}
+      - -X github.com/shariff25/armor-preflight-check/internal/buildinfo.ProbeImage={{ .Env.PROBE_IMAGE }}
 
 archives:
   - formats: [tar.gz]

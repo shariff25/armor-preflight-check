@@ -3,7 +3,7 @@ package output
 import (
 	"sort"
 
-	"github.com/shariff25/agent-goverance-OS/armor-preflight/internal/model"
+	"github.com/shariff25/armor-preflight-check/internal/model"
 )
 
 // Team is the findings for one owning team.

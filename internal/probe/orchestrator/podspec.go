@@ -5,7 +5,7 @@ import (
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	"github.com/shariff25/agent-goverance-OS/armor-preflight/internal/probe/protocol"
+	"github.com/shariff25/armor-preflight-check/internal/probe/protocol"
 )
 
 // Names of the objects in the run namespace.

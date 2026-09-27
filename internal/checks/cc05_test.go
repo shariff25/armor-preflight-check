@@ -9,11 +9,11 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/shariff25/agent-goverance-OS/armor-preflight/internal/engine"
-	"github.com/shariff25/agent-goverance-OS/armor-preflight/internal/model"
-	"github.com/shariff25/agent-goverance-OS/armor-preflight/internal/probe/agent"
-	"github.com/shariff25/agent-goverance-OS/armor-preflight/internal/probe/protocol"
-	"github.com/shariff25/agent-goverance-OS/armor-preflight/internal/probe/sgx"
+	"github.com/shariff25/armor-preflight-check/internal/engine"
+	"github.com/shariff25/armor-preflight-check/internal/model"
+	"github.com/shariff25/armor-preflight-check/internal/probe/agent"
+	"github.com/shariff25/armor-preflight-check/internal/probe/protocol"
+	"github.com/shariff25/armor-preflight-check/internal/probe/sgx"
 )
 
 // sgxEnv runs the real agent with a fake SGX provider on each SGX node.

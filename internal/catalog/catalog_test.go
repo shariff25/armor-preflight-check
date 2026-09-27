@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/shariff25/agent-goverance-OS/armor-preflight/internal/model"
+	"github.com/shariff25/armor-preflight-check/internal/model"
 )
 
 func mustLoad(t *testing.T) *Catalog {

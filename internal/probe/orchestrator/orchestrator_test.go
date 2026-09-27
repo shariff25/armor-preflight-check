@@ -19,7 +19,7 @@ import (
 	psaapi "k8s.io/pod-security-admission/api"
 	"k8s.io/pod-security-admission/policy"
 
-	"github.com/shariff25/agent-goverance-OS/armor-preflight/internal/probe/protocol"
+	"github.com/shariff25/armor-preflight-check/internal/probe/protocol"
 )
 
 const runID = "20260926-1512-7f3a"

@@ -4,7 +4,7 @@ Decisions made where the build brief was open or conflicted. D-numbers match [PL
 
 ## M0
 
-- **Module path.** `github.com/shariff25/agent-goverance-OS/armor-preflight`, matching the repository it lives in. Change it if the tool moves to a Fortanix repository.
+- **Module path.** `github.com/shariff25/armor-preflight-check`, matching the repository it lives in. Change it if the tool moves to a Fortanix repository.
 - **Supported Armor versions are listed, not ranged.** The catalog lists `1.0.404`, the only version the brief names. The range of versions a catalog covers isn't documented, so none is guessed. Add versions as Fortanix confirms them.
 - **Catalog version.** `2026.09`, from the brief's example result.
 - **Unimplemented commands exit 3.** Until a command is implemented it reports "not implemented yet" and exits 3 ("Preflight failed to run"), so a script never mistakes it for a READY result.
@@ -241,3 +241,10 @@ The user chose not to gate the build on D-1 to D-3, so the plan's defaults apply
   - `TestWorkstationEgressIsOnlyTheEndpointsUnderTest` is the automated half of R1.4's packet capture. It runs every real check through a recording network.
 - **The CLI test cluster gains a dynamic client.** Without one, K8S-05 and K8S-08 panicked in CLI tests. The real client always has one, so this was a test gap, not a product bug.
 - **[ACCEPTANCE.md](ACCEPTANCE.md)** lists every criterion with its evidence. It separates what CI proves from what needs a manual run or a Fortanix decision.
+
+## Moved to its own repository
+
+- **Repository.** armor-preflight moved from `shariff25/agent-goverance-OS` (where it lived under `armor-preflight/`) to `shariff25/armor-preflight-check`, with its commit history.
+- **Module path** is now `github.com/shariff25/armor-preflight-check`. This supersedes the M0 entry above.
+- **Release tags** are now plain `vX.Y.Z`. The `armor-preflight/` prefix (M7 entry above) only existed because the old repository held other projects. `release.sh` still passes the version in, and the release workflow still drafts the GitHub release itself. The keyless signing identity is now `.github/workflows/armor-preflight-release.yml@refs/tags/v…` in this repository.
+- **CI** runs on every push and pull request, from the repository root.

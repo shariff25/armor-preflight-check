@@ -7,12 +7,12 @@ import (
 
 	corev1 "k8s.io/api/core/v1"
 
-	"github.com/shariff25/agent-goverance-OS/armor-preflight/internal/catalog"
-	"github.com/shariff25/agent-goverance-OS/armor-preflight/internal/engine"
-	"github.com/shariff25/agent-goverance-OS/armor-preflight/internal/model"
-	"github.com/shariff25/agent-goverance-OS/armor-preflight/internal/probe/orchestrator"
-	"github.com/shariff25/agent-goverance-OS/armor-preflight/internal/probe/protocol"
-	"github.com/shariff25/agent-goverance-OS/armor-preflight/internal/probe/sgx"
+	"github.com/shariff25/armor-preflight-check/internal/catalog"
+	"github.com/shariff25/armor-preflight-check/internal/engine"
+	"github.com/shariff25/armor-preflight-check/internal/model"
+	"github.com/shariff25/armor-preflight-check/internal/probe/orchestrator"
+	"github.com/shariff25/armor-preflight-check/internal/probe/protocol"
+	"github.com/shariff25/armor-preflight-check/internal/probe/sgx"
 )
 
 // SGXNodes lists the SGX nodes to run per-node probes on, tolerating each

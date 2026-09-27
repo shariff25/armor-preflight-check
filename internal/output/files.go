@@ -7,7 +7,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/shariff25/agent-goverance-OS/armor-preflight/internal/redact"
+	"github.com/shariff25/armor-preflight-check/internal/redact"
 )
 
 // WriteFiles writes result.json, report.html and firewall-request.csv to

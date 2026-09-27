@@ -6,9 +6,9 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/shariff25/agent-goverance-OS/armor-preflight/internal/cli"
-	"github.com/shariff25/agent-goverance-OS/armor-preflight/internal/exitcode"
-	"github.com/shariff25/agent-goverance-OS/armor-preflight/internal/output"
+	"github.com/shariff25/armor-preflight-check/internal/cli"
+	"github.com/shariff25/armor-preflight-check/internal/exitcode"
+	"github.com/shariff25/armor-preflight-check/internal/output"
 )
 
 func main() {

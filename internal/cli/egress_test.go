@@ -11,10 +11,10 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/shariff25/agent-goverance-OS/armor-preflight/internal/catalog"
-	"github.com/shariff25/agent-goverance-OS/armor-preflight/internal/checks"
-	"github.com/shariff25/agent-goverance-OS/armor-preflight/internal/settings"
-	"github.com/shariff25/agent-goverance-OS/armor-preflight/internal/tlsutil"
+	"github.com/shariff25/armor-preflight-check/internal/catalog"
+	"github.com/shariff25/armor-preflight-check/internal/checks"
+	"github.com/shariff25/armor-preflight-check/internal/settings"
+	"github.com/shariff25/armor-preflight-check/internal/tlsutil"
 )
 
 // egressRecorder stands in for the network: it records every name looked up

@@ -10,10 +10,10 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/shariff25/agent-goverance-OS/armor-preflight/internal/exitcode"
-	"github.com/shariff25/agent-goverance-OS/armor-preflight/internal/output"
-	"github.com/shariff25/agent-goverance-OS/armor-preflight/internal/redact"
-	"github.com/shariff25/agent-goverance-OS/armor-preflight/internal/settings"
+	"github.com/shariff25/armor-preflight-check/internal/exitcode"
+	"github.com/shariff25/armor-preflight-check/internal/output"
+	"github.com/shariff25/armor-preflight-check/internal/redact"
+	"github.com/shariff25/armor-preflight-check/internal/settings"
 )
 
 type bundleOptions struct {

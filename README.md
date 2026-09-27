@@ -159,7 +159,7 @@ COSIGN_PUBLIC_KEY=cosign.pub scripts/verify-release.sh ./downloads
 ```
 
 ```
-CERT_IDENTITY='^https://github\.com/<owner>/<repo>/\.github/workflows/armor-preflight-release\.yml@refs/tags/armor-preflight/v' \
+CERT_IDENTITY='^https://github\.com/shariff25/armor-preflight-check/\.github/workflows/armor-preflight-release\.yml@refs/tags/v' \
 CERT_OIDC_ISSUER=https://token.actions.githubusercontent.com \
   scripts/verify-release.sh ./downloads
 ```
@@ -177,7 +177,7 @@ make lint     # gofmt + go vet
 make cross    # static Linux binaries for amd64 and arm64
 ```
 
-Releases come from [`scripts/release.sh`](scripts/release.sh), run by the release workflow when a tag `armor-preflight/vX.Y.Z` is pushed. It:
+Releases come from [`scripts/release.sh`](scripts/release.sh), run by the release workflow when a tag `vX.Y.Z` is pushed. It:
 1. builds the probe image for linux/amd64 and linux/arm64 as one OCI archive;
 2. pushes the archive and signs its digest;
 3. builds the binaries with that digest as their default probe image, plus archives, SBOMs and `checksums.txt` (goreleaser);

@@ -18,12 +18,12 @@ import (
 	"k8s.io/client-go/kubernetes/fake"
 	k8stesting "k8s.io/client-go/testing"
 
-	"github.com/shariff25/agent-goverance-OS/armor-preflight/internal/exitcode"
-	"github.com/shariff25/agent-goverance-OS/armor-preflight/internal/kube"
-	"github.com/shariff25/agent-goverance-OS/armor-preflight/internal/model"
-	"github.com/shariff25/agent-goverance-OS/armor-preflight/internal/output"
-	"github.com/shariff25/agent-goverance-OS/armor-preflight/internal/probe/orchestrator"
-	"github.com/shariff25/agent-goverance-OS/armor-preflight/internal/probe/protocol"
+	"github.com/shariff25/armor-preflight-check/internal/exitcode"
+	"github.com/shariff25/armor-preflight-check/internal/kube"
+	"github.com/shariff25/armor-preflight-check/internal/model"
+	"github.com/shariff25/armor-preflight-check/internal/output"
+	"github.com/shariff25/armor-preflight-check/internal/probe/orchestrator"
+	"github.com/shariff25/armor-preflight-check/internal/probe/protocol"
 )
 
 const testProbeImage = "example.invalid/armor-preflight-probe@sha256:abc"

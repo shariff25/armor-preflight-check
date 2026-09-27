@@ -20,8 +20,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/shariff25/agent-goverance-OS/armor-preflight/internal/probe/protocol"
-	"github.com/shariff25/agent-goverance-OS/armor-preflight/internal/tlsutil"
+	"github.com/shariff25/armor-preflight-check/internal/probe/protocol"
+	"github.com/shariff25/armor-preflight-check/internal/tlsutil"
 )
 
 // maxHeaderBytes caps how much of a response the probe reads (status line

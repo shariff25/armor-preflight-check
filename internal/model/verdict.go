@@ -1,6 +1,6 @@
 package model
 
-import "github.com/shariff25/agent-goverance-OS/armor-preflight/internal/exitcode"
+import "github.com/shariff25/armor-preflight-check/internal/exitcode"
 
 // Verdict is the overall result of a run.
 type Verdict string

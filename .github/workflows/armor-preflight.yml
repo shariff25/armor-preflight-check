@@ -1,0 +1,157 @@
+name: armor-preflight
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+# Actions are pinned by commit, since a tag can be moved. The comment names
+# the release each commit belongs to.
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
+        with:
+          go-version-file: go.mod
+          cache-dependency-path: go.sum
+      - run: make lint
+      - run: go run honnef.co/go/tools/cmd/staticcheck@v0.8.1 ./... # 2026.2.1
+      - run: shellcheck scripts/*.sh
+      - run: go run github.com/rhysd/actionlint/cmd/actionlint@v1.7.12 .github/workflows/armor-preflight*.yml
+      - run: make test
+      - run: make cross
+      - run: ./bin/armor-preflight-linux-amd64 version
+
+  # R1.4: workstation mode makes zero writes, checked in a real API server's
+  # audit log, running as an identity bound only to the shipped RBAC.
+  audit-lab:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
+        with:
+          go-version-file: go.mod
+          cache-dependency-path: go.sum
+      - run: scripts/audit-lab.sh
+
+  # The probe image builds, runs as non-root on a read-only root filesystem
+  # with every capability dropped and no network, and prints a result line.
+  probe-image:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+      - run: make probe-image
+      - name: Run the probe locked down
+        run: |
+          printf '{"version":"1","runId":"20260101-0000-ci00","nodePool":"ci"}' > /tmp/request.json
+          chmod 644 /tmp/request.json
+          out=$(docker run --rm --read-only --cap-drop ALL --security-opt no-new-privileges \
+            --user 65532:65532 --network none -e NODE_NAME=ci-node \
+            -v /tmp/request.json:/etc/armor-preflight/request.json:ro armor-preflight-probe:dev)
+          echo "$out"
+          echo "$out" | grep -q '^ARMOR-PREFLIGHT-RESULT {"version":"1","runId":"20260101-0000-ci00","nodePool":"ci","node":"ci-node"'
+
+  # Known vulnerabilities in dependencies and the Go standard library.
+  govulncheck:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
+        with:
+          go-version-file: go.mod
+          cache-dependency-path: go.sum
+      - run: go run golang.org/x/vuln/cmd/govulncheck@v1.8.0 ./...
+
+  # R1.4 and R1.5: a complete signed release of this commit, verified the way
+  # a customer would verify it. It uses a throwaway key, a registry on the
+  # runner and no transparency log, so nothing is published.
+  release-snapshot:
+    runs-on: ubuntu-latest
+    services:
+      registry:
+        image: registry:3@sha256:852b3e4d378c426dda6b318fe9d9bfe8e92a0eccb9926671ec3d3ea17a196696
+        ports: ["5000:5000"]
+    env:
+      VERSION: 0.0.0-ci.${{ github.run_number }}
+      PROBE_REPOSITORY: localhost:5000/armor-preflight-probe
+      SIGN_OFFLINE: "1"
+      VERIFY_OFFLINE: "1"
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
+        with:
+          go-version-file: go.mod
+          cache-dependency-path: go.sum
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+        with:
+          driver-opts: image=moby/buildkit:v0.33.0@sha256:6c2fa84a6b61ccd72899dde4239f8d5717f05f9a8ca6f3cad185fb1a95a94de3
+      - uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
+        with:
+          cosign-release: v3.1.3
+      - uses: anchore/sbom-action/download-syft@3ad7283483fc7af8ff2b4ea19663c2d5ca935e26 # v0.24.2
+        with:
+          syft-version: v1.52.0
+      - uses: goreleaser/goreleaser-action@f06c13b6b1a9625abc9e6e439d9c05a8f2190e94 # v7.2.3
+        with:
+          install-only: true
+          version: v2.18.2
+      - run: go install github.com/google/go-containerregistry/cmd/crane@v0.22.1
+      - name: Throwaway signing key
+        working-directory: ${{ runner.temp }}
+        run: COSIGN_PASSWORD='' cosign generate-key-pair
+      - name: Build and sign the release
+        env:
+          COSIGN_KEY: ${{ runner.temp }}/cosign.key
+          COSIGN_PASSWORD: ""
+        run: scripts/release.sh --snapshot
+      - name: Verify it
+        env:
+          COSIGN_PUBLIC_KEY: ${{ runner.temp }}/cosign.pub
+        run: scripts/verify-release.sh build/release
+      - name: A tampered release fails verification
+        env:
+          COSIGN_PUBLIC_KEY: ${{ runner.temp }}/cosign.pub
+          SKIP_REGISTRY: "1"
+        run: |
+          t=$RUNNER_TEMP/tampered
+          cp -r build/release "$t"
+          printf x >>"$t/armor-preflight_${VERSION}_linux_amd64.tar.gz"
+          if scripts/verify-release.sh "$t"; then
+            echo "a tampered archive passed verification"
+            exit 1
+          fi
+      - name: The binary pins the signed probe image
+        run: |
+          tar -xzf "build/release/armor-preflight_${VERSION}_linux_amd64.tar.gz" -C "$RUNNER_TEMP" armor-preflight
+          "$RUNNER_TEMP/armor-preflight" version | tee "$RUNNER_TEMP/version.txt"
+          grep -qxF "probe image: $(cat build/release/probe-image.txt)" "$RUNNER_TEMP/version.txt"
+      - name: Mirror the image from the archive, then run it locked down
+        run: |
+          ref=$(cat build/release/probe-image.txt)
+          mirror=localhost:5000/mirror/armor-preflight-probe
+          mkdir "$RUNNER_TEMP/layout"
+          tar -xf "build/release/armor-preflight-probe_${VERSION}_oci.tar" -C "$RUNNER_TEMP/layout"
+          crane push "$RUNNER_TEMP/layout" "$mirror:$VERSION"
+          test "$(crane digest "$mirror:$VERSION")" = "${ref##*@}"
+          docker pull "$mirror@${ref##*@}"
+          printf '{"version":"1","runId":"20260101-0000-ci00","nodePool":"ci"}' >"$RUNNER_TEMP/request.json"
+          chmod 644 "$RUNNER_TEMP/request.json"
+          docker run --rm --read-only --cap-drop ALL --security-opt no-new-privileges \
+            --user 65532:65532 --network none -e NODE_NAME=ci-node \
+            -v "$RUNNER_TEMP/request.json:/etc/armor-preflight/request.json:ro" \
+            "$mirror@${ref##*@}" | grep -q '^ARMOR-PREFLIGHT-RESULT '

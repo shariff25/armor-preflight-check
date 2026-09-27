@@ -21,12 +21,12 @@ import (
 	"sync"
 	"time"
 
-	"github.com/shariff25/agent-goverance-OS/armor-preflight/internal/azblob"
-	"github.com/shariff25/agent-goverance-OS/armor-preflight/internal/probe/nettest"
-	"github.com/shariff25/agent-goverance-OS/armor-preflight/internal/probe/protocol"
-	"github.com/shariff25/agent-goverance-OS/armor-preflight/internal/probe/sgx"
-	"github.com/shariff25/agent-goverance-OS/armor-preflight/internal/registry"
-	"github.com/shariff25/agent-goverance-OS/armor-preflight/internal/tlsutil"
+	"github.com/shariff25/armor-preflight-check/internal/azblob"
+	"github.com/shariff25/armor-preflight-check/internal/probe/nettest"
+	"github.com/shariff25/armor-preflight-check/internal/probe/protocol"
+	"github.com/shariff25/armor-preflight-check/internal/probe/sgx"
+	"github.com/shariff25/armor-preflight-check/internal/registry"
+	"github.com/shariff25/armor-preflight-check/internal/tlsutil"
 )
 
 // Agent runs a probe request. The zero value uses the real network.

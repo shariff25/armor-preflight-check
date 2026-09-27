@@ -32,11 +32,11 @@ import (
 	"k8s.io/client-go/kubernetes/fake"
 	k8stesting "k8s.io/client-go/testing"
 
-	"github.com/shariff25/agent-goverance-OS/armor-preflight/internal/catalog"
-	"github.com/shariff25/agent-goverance-OS/armor-preflight/internal/engine"
-	"github.com/shariff25/agent-goverance-OS/armor-preflight/internal/kube"
-	"github.com/shariff25/agent-goverance-OS/armor-preflight/internal/registry/registrytest"
-	"github.com/shariff25/agent-goverance-OS/armor-preflight/internal/settings"
+	"github.com/shariff25/armor-preflight-check/internal/catalog"
+	"github.com/shariff25/armor-preflight-check/internal/engine"
+	"github.com/shariff25/armor-preflight-check/internal/kube"
+	"github.com/shariff25/armor-preflight-check/internal/registry/registrytest"
+	"github.com/shariff25/armor-preflight-check/internal/settings"
 )
 
 const (

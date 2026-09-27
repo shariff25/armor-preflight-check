@@ -1,7 +1,7 @@
 // Package checks holds the implementation of each catalog check.
 package checks
 
-import "github.com/shariff25/agent-goverance-OS/armor-preflight/internal/engine"
+import "github.com/shariff25/armor-preflight-check/internal/engine"
 
 // Registry returns every implemented check, keyed by catalog ID.
 func Registry() engine.Registry {

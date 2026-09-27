@@ -13,9 +13,9 @@ import (
 	"github.com/spf13/cobra"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	"github.com/shariff25/agent-goverance-OS/armor-preflight/internal/exitcode"
-	"github.com/shariff25/agent-goverance-OS/armor-preflight/internal/kube"
-	"github.com/shariff25/agent-goverance-OS/armor-preflight/internal/probe/orchestrator"
+	"github.com/shariff25/armor-preflight-check/internal/exitcode"
+	"github.com/shariff25/armor-preflight-check/internal/kube"
+	"github.com/shariff25/armor-preflight-check/internal/probe/orchestrator"
 )
 
 type cleanupOptions struct {

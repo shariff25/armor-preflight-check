@@ -12,8 +12,8 @@ import (
 
 	"sigs.k8s.io/yaml"
 
-	"github.com/shariff25/agent-goverance-OS/armor-preflight/internal/model"
-	"github.com/shariff25/agent-goverance-OS/armor-preflight/internal/settings"
+	"github.com/shariff25/armor-preflight-check/internal/model"
+	"github.com/shariff25/armor-preflight-check/internal/settings"
 )
 
 //go:embed catalog.yaml

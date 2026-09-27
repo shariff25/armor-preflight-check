@@ -6,7 +6,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	"github.com/shariff25/agent-goverance-OS/armor-preflight/internal/engine"
+	"github.com/shariff25/armor-preflight-check/internal/engine"
 )
 
 // listNodes and listPods fetch cluster-wide lists once per run and share

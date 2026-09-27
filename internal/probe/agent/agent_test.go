@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/shariff25/agent-goverance-OS/armor-preflight/internal/probe/protocol"
+	"github.com/shariff25/armor-preflight-check/internal/probe/protocol"
 )
 
 func TestRun(t *testing.T) {

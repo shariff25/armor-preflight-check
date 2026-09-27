@@ -10,8 +10,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/shariff25/agent-goverance-OS/armor-preflight/internal/probe/protocol"
-	"github.com/shariff25/agent-goverance-OS/armor-preflight/internal/probe/sgx"
+	"github.com/shariff25/armor-preflight-check/internal/probe/protocol"
+	"github.com/shariff25/armor-preflight-check/internal/probe/sgx"
 )
 
 func runSGX(t *testing.T, provider sgx.Provider, nonce string) []protocol.Stage {

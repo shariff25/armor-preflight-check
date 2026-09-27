@@ -195,3 +195,9 @@ The user chose not to gate the build on D-1 to D-3, so the plan's defaults apply
   - `OutOfDate`, `OutOfDateConfigurationNeeded`, `Revoked` and unknown statuses fail.
 - **CC-05 results are per node.** A node-level parent failure (CC-01, CC-02) or a pool-level one (CC-03, CC-04, REG-03 for the node's pool) skips CC-05 for that node, naming the parent. The test fixtures now set the node-to-pool map the way the CLI does, so pool-to-node skipping is covered.
 - **All 35 checks are implemented.** A test fails the build if the catalog and the registry of implemented checks ever differ, in either direction. A run now always reaches READY, READY WITH WARNINGS or NOT READY, unless Preflight itself hits an internal error.
+
+## Dependency security
+
+- **Go 1.25.14 is the minimum.** `govulncheck` found vulnerabilities reachable from Preflight's code in the Go 1.24.7 standard library, some fixed only in Go 1.25 releases. `go.mod` now requires Go 1.25.14, and the probe image builds with `golang:1.25.14`, pinned by digest.
+- **`golang.org/x/net` v0.55.0 and `golang.org/x/text` v0.39.0.** These are the lowest versions that fix the advisories `govulncheck` reported. Newer releases require Go 1.26, so they wait for a deliberate toolchain move.
+- **`govulncheck` blocks merges.** A new advisory can turn CI red without any code change. That is intended: the fix is to upgrade, not to suppress the finding.

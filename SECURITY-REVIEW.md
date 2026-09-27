@@ -14,7 +14,7 @@ Every finding below is fixed and has a regression test. For the important fixes,
 | `go vet`, `gofmt` | clean |
 | `staticcheck` 2025.1.1 | 1 style issue (C2), fixed. Now clean, and it runs in CI. |
 | `gosec` v2.22.4 | "Hardcoded credential" hits are constant key names, not secrets. File-path hits: see S6 and S11. Unhandled-error hits are `Close` on read-only paths. |
-| `govulncheck` | Couldn't run here (the build sandbox can't reach `vuln.go.dev`). It now runs in CI as a job of its own. |
+| `govulncheck` | Couldn't run here (the build sandbox can't reach `vuln.go.dev`), so it runs in CI as a job of its own. Its first run found 36 reachable vulnerabilities: 33 in the Go 1.24.7 standard library (`crypto/x509`, `crypto/tls`, `net/url`, `net/http`, `html/template` and others) and 3 in `golang.org/x/net` v0.38.0 and `golang.org/x/text` v0.23.0. Fixed (S13). |
 | `go test -race ./...` | clean |
 | `scripts/audit-lab.sh` | passes, against a real kube-apiserver with audit logging |
 
@@ -63,6 +63,7 @@ Severity is the impact if exploited, before the fix.
 | S10 | The output directory and files were world-readable. | Low | Directory 0750, files 0640. | `TestOutputPermissions` |
 | S11 | User-supplied files were read with no size limit, and devices were accepted. | Low | `fsutil.ReadLimited`: regular files only, with a limit per kind of file. | `TestReadLimited`, `TestPentestSettingsPathToDevice` |
 | S12 | Base images were pinned by tag only. No dependency CVE scan. | Low | Both images pinned by digest. `govulncheck` and `staticcheck` jobs in CI. | CI |
+| S13 | Known vulnerabilities in the toolchain and dependencies (reported by `govulncheck`): the standard library of Go 1.24.7, `golang.org/x/net` v0.38.0 and `golang.org/x/text` v0.23.0. | Medium | Go 1.25.14 (minimum in `go.mod`, and the probe image's build stage, pinned by digest), `x/net` v0.55.0, `x/text` v0.39.0. | CI `govulncheck` |
 | P1 | Performance: every check re-listed all nodes and pods (8 node lists and 4 cluster-wide pod lists per run). | — | A per-run cache (`Env.Memo`). Errors aren't cached, and concurrent callers share one fetch. | `TestClusterWideListsAreShared`, `TestMemo` |
 | C2 | An error string started with a capital letter (ST1005). | — | Fixed. | staticcheck |
 

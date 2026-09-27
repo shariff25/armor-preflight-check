@@ -110,7 +110,7 @@ CI runs the lab on every change.
 
 ## Building
 
-Requires Go 1.24.
+Requires Go 1.25.14 or later (the oldest release without known standard-library vulnerabilities that affect this code).
 
 ```
 make build    # bin/armor-preflight

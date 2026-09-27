@@ -1,10 +1,492 @@
 # Armor Preflight check catalog.
 #
 # This file is the single source of truth for what Preflight checks. It is
-# embedded in the binary. Checks are added in milestone M1.
+# embedded in the binary, and a later milestone renders the Prerequisites doc
+# page from it. Code implements each check's logic; everything else about a
+# check (severity, owner, dependencies, remediation, thresholds, endpoints)
+# lives here.
+#
+# Field reference:
+#   runsIn:   workstation   - CLI only, read-only against the Kubernetes API
+#             cluster-write - CLI in cluster mode; creates test objects in the
+#                             run namespace (D-4)
+#             probe         - inside probe pods (cluster mode)
+#   scope:    cluster | nodePool | node - what each result applies to
+#   target:   cluster (Phase 1) | host (Phase 2 CN-* checks)
+#   needs:    settings paths that must be set, else the check is skipped
+#   needsEnv: settings paths naming an environment variable that must be set
+#   nonProductionSeverity: severity when storage.environment is poc
+#
+# Values marked TBD must come from Fortanix; checks that need them report
+# skipped and name the missing value (D-9).
+
 catalogVersion: "2026.09"
 
-# Armor versions this catalog covers. Listed explicitly: ranges are not
-# guessed (see DECISIONS.md).
+# Armor versions this catalog covers. Listed explicitly; no range is guessed.
 armorVersions:
   - "1.0.404"
+
+# Which Preflight release to use for Armor versions this build does not
+# cover. Empty until Fortanix publishes the mapping; the refusal message then
+# points to the support portal.
+preflightForArmor: []
+
+parameters:
+  minKubernetes: "1.34.8"
+  nfdMinVersion: "0.15.0"
+  certManagerVersions: TBD
+  systemPool:
+    minNodes: 3
+    minSku: Standard_D4d_v5
+  sgxPool:
+    minNodes: 3
+    minSku: DC8_v3            # as written in the brief; see DECISIONS.md
+  validatedOs: "Ubuntu 24"
+  clockSkewSeconds: 5
+  pullSecretExpiryWarnDays: 14
+  loadBalancerTimeoutSeconds: 90
+  sgxResources:
+    - sgx.intel.com/enclave
+    - sgx.intel.com/provision
+  nfdSgxLabel: feature.node.kubernetes.io/cpu-security.sgx.enabled
+  nodePoolLabel: kubernetes.azure.com/agentpool
+  armorOperatorCrdGroup: TBD
+  operatorChartRef: TBD
+  probeImage: TBD
+  k8ssandraCrdGroups:
+    - k8ssandra.io
+    - cassandra.datastax.com
+
+docLinks:
+  prerequisites: &prereq https://support.fortanix.com/docs/fortanix-armor-on-premises-prerequisites
+  installation: &install https://support.fortanix.com/docs/fortanix-armor-installation-guide-on-prem
+
+# Endpoints the network checks test, from every node pool. TCP 443 unless a
+# port is given. fromSetting endpoints are only tested when that setting is set.
+endpoints:
+  - fqdn: cr.download.fortanix.com
+    fromSetting: registry.url
+    purpose: Armor images and Helm charts
+    checks: [NET-02, REG-01, REG-02, REG-03]
+  - fqdn: pccs.fortanix.com
+    purpose: SGX DCAP collateral (Fortanix PCCS)
+    checks: [CC-03, NET-02]
+    sgxOnly: true
+  - fqdn: global.acccache.azure.net
+    purpose: SGX DCAP collateral (Azure PCCS)
+    checks: [CC-03, NET-02]
+    sgxOnly: true
+  - fqdn: api.trustedservices.intel.com
+    purpose: Remote attestation (Intel Trust Authority)
+    checks: [CC-04, NET-02]
+    sgxOnly: true
+  - fromSetting: attestation.azureAttestationHost
+    purpose: Remote attestation (Azure Attestation)
+    checks: [CC-04, NET-02]
+    sgxOnly: true
+  - fromSetting: storage.accountFqdn
+    purpose: Cassandra backups
+    checks: [BAK-02, NET-02]
+  - fromSetting: syslog.host
+    portFromSetting: syslog.port
+    purpose: Audit log export
+    checks: [NET-06]
+
+checks:
+  # --- workstation -------------------------------------------------------
+  - id: WS-01
+    title: Workstation has kubectl, Helm, jq and OpenSSL, and KUBECONFIG targets the intended cluster
+    area: workstation
+    severity: blocker
+    owner: Platform
+    runsIn: workstation
+    scope: cluster
+    docLink: *prereq
+    remediation: Install kubectl, Helm, jq and OpenSSL on the admin workstation, and select the kube context of the cluster Armor will be installed on.
+
+  # --- kubernetes --------------------------------------------------------
+  - id: K8S-01
+    title: Kubernetes 1.34.8 or later, on the supported upgrade path
+    area: kubernetes
+    severity: blocker
+    owner: Platform
+    runsIn: workstation
+    scope: cluster
+    dependsOn: [WS-01]
+    docLink: *prereq
+    remediation: Upgrade the cluster to Kubernetes 1.34.8 or later along the AKS supported upgrade path.
+
+  - id: K8S-02
+    title: System node pool has 3 or more Linux nodes, Standard_D4d_v5 or larger
+    area: kubernetes
+    severity: blocker
+    owner: Platform
+    runsIn: workstation
+    scope: cluster
+    dependsOn: [WS-01]
+    docLink: *prereq
+    remediation: Add a system node pool with at least 3 Linux nodes of size Standard_D4d_v5 or larger.
+
+  - id: K8S-03
+    title: SGX user node pool has 3 or more nodes, DC8_v3 or larger, and at least as many as the planned replicas
+    area: kubernetes
+    severity: blocker
+    owner: Platform
+    runsIn: workstation
+    scope: cluster
+    dependsOn: [WS-01]
+    docLink: *prereq
+    remediation: Add an SGX user node pool with at least 3 nodes (and no fewer than the planned replicas) of size DC8_v3 or larger.
+
+  - id: K8S-04
+    title: Nodes run Linux; Ubuntu 24.x is the validated OS
+    area: kubernetes
+    severity: warning
+    owner: Platform
+    runsIn: workstation
+    scope: node
+    dependsOn: [WS-01]
+    docLink: *prereq
+    remediation: Use the Ubuntu 24.x node image, which is the OS Armor is validated on.
+
+  - id: K8S-05
+    title: No K8ssandra operator or CRDs present
+    area: kubernetes
+    severity: blocker
+    owner: Platform
+    runsIn: workstation
+    scope: cluster
+    dependsOn: [WS-01]
+    docLink: *prereq
+    remediation: Remove the existing K8ssandra operator and its CRDs; Armor installs and manages its own.
+
+  - id: K8S-06
+    title: No existing Armor operator (one per cluster)
+    area: kubernetes
+    severity: blocker
+    owner: Platform
+    runsIn: workstation
+    scope: cluster
+    dependsOn: [WS-01]
+    docLink: *prereq
+    remediation: Use a cluster without an Armor operator; only one Armor operator is supported per cluster.
+
+  - id: K8S-07
+    title: An ingress controller is running and an IngressClass exists
+    area: kubernetes
+    severity: blocker
+    owner: Platform
+    runsIn: workstation
+    scope: cluster
+    dependsOn: [WS-01]
+    docLink: *prereq
+    remediation: Install an ingress controller and create an IngressClass for it.
+
+  - id: K8S-08
+    title: cert-manager is installed at a supported version and a ClusterIssuer is Ready
+    area: kubernetes
+    severity: blocker
+    owner: Platform
+    runsIn: workstation
+    scope: cluster
+    dependsOn: [WS-01]
+    docLink: *prereq
+    remediation: Install a supported cert-manager version and create a ClusterIssuer that reports Ready.
+
+  - id: K8S-09
+    title: Installer identity can create CRDs, ClusterRoles and namespaces, and approve CSRs
+    area: kubernetes
+    severity: blocker
+    owner: Platform
+    runsIn: workstation
+    scope: cluster
+    dependsOn: [WS-01]
+    docLink: *install
+    remediation: Grant the installer identity permission to create CRDs, ClusterRoles and namespaces, and to approve CertificateSigningRequests.
+
+  - id: K8S-10
+    title: A storage class provisions a volume; reclaim policy Delete is flagged
+    area: kubernetes
+    severity: blocker
+    owner: Platform / cloud admin
+    runsIn: cluster-write
+    scope: cluster
+    dependsOn: [WS-01]
+    docLink: *prereq
+    remediation: Make a default storage class available that provisions volumes, preferably with reclaim policy Retain.
+
+  - id: K8S-11
+    title: A LoadBalancer Service receives an address
+    area: kubernetes
+    severity: warning
+    owner: Network
+    runsIn: cluster-write
+    scope: cluster
+    dependsOn: [WS-01]
+    docLink: *prereq
+    remediation: Make sure LoadBalancer Services are assigned an address (check the cloud load balancer quota and subnet permissions).
+
+  - id: K8S-12
+    title: Pod and service CIDRs discovered for internalSubnets
+    area: kubernetes
+    severity: info
+    owner: Platform
+    runsIn: workstation
+    scope: cluster
+    dependsOn: [WS-01]
+    docLink: *prereq
+    remediation: Record these CIDRs as internalSubnets in the Armor configuration.
+
+  # --- confidential computing ------------------------------------------
+  - id: CC-01
+    title: SGX device plugin running; SGX nodes advertise sgx.intel.com/enclave and sgx.intel.com/provision
+    area: confidential-computing
+    severity: blocker
+    owner: Platform
+    runsIn: workstation
+    scope: node
+    dependsOn: [K8S-03]
+    docLink: *prereq
+    remediation: Enable the SGX device plugin (the AKS confcom add-on) so each SGX node advertises sgx.intel.com/enclave and sgx.intel.com/provision.
+
+  - id: CC-02
+    title: Node Feature Discovery 0.15.0 or later labels SGX nodes cpu-security.sgx.enabled=true
+    area: confidential-computing
+    severity: blocker
+    owner: Platform
+    runsIn: workstation
+    scope: node
+    dependsOn: [K8S-03]
+    docLink: *prereq
+    remediation: Install Node Feature Discovery 0.15.0 or later so SGX nodes carry feature.node.kubernetes.io/cpu-security.sgx.enabled=true.
+
+  - id: CC-03
+    title: DCAP collateral reachable from SGX nodes (global.acccache.azure.net, pccs.fortanix.com)
+    area: confidential-computing
+    severity: blocker
+    owner: Network
+    runsIn: probe
+    scope: nodePool
+    dependsOn: [NET-01]
+    docLink: *prereq
+    remediation: Allow outbound TCP 443 from the SGX node pool subnet to global.acccache.azure.net and pccs.fortanix.com.
+
+  - id: CC-04
+    title: Attestation services reachable from SGX nodes (Azure Attestation, api.trustedservices.intel.com)
+    area: confidential-computing
+    severity: blocker
+    owner: Network
+    runsIn: probe
+    scope: nodePool
+    dependsOn: [NET-01]
+    docLink: *prereq
+    remediation: Allow outbound TCP 443 from the SGX node pool subnet to the Azure Attestation host and api.trustedservices.intel.com.
+
+  - id: CC-05
+    title: Each SGX node generates a quote that verifies against fetched collateral
+    area: confidential-computing
+    severity: blocker
+    owner: Platform + Fortanix
+    runsIn: probe
+    scope: node
+    dependsOn: [CC-01, CC-02, CC-03, CC-04, REG-03]
+    docLink: *prereq
+    remediation: Check the SGX node's platform registration and DCAP configuration, then contact Fortanix Support with this report.
+
+  # --- network -----------------------------------------------------------
+  - id: NET-01
+    title: Every required FQDN resolves from pods on every node pool
+    area: network
+    severity: blocker
+    owner: Network / DNS
+    runsIn: probe
+    scope: nodePool
+    docLink: *prereq
+    remediation: Make every required FQDN resolvable from the cluster's DNS for pods on this node pool.
+
+  - id: NET-02
+    title: TCP 443 and TLS handshake succeed from each node pool to each required egress FQDN
+    area: network
+    severity: blocker
+    owner: Network
+    runsIn: probe
+    scope: nodePool
+    dependsOn: [NET-01]
+    docLink: *prereq
+    remediation: Allow outbound TCP 443 from this node pool's subnet to each failed destination (see firewall-request.csv).
+
+  - id: NET-03
+    title: No TLS interception on registry and attestation paths, or the intercepting CA is trusted
+    area: network
+    severity: blocker
+    owner: Network / security
+    runsIn: probe
+    scope: nodePool
+    dependsOn: [NET-02]
+    docLink: *prereq
+    remediation: Exempt the registry and attestation endpoints from TLS inspection, or supply the intercepting CA as proxy.trustedCaPath.
+
+  - id: NET-04
+    title: Proxy settings are consistent; NO_PROXY covers cluster CIDRs and Armor domains
+    area: network
+    severity: warning
+    owner: Platform
+    runsIn: workstation
+    scope: cluster
+    dependsOn: [WS-01]
+    docLink: *prereq
+    remediation: Add the pod and service CIDRs and the Armor domains to NO_PROXY.
+
+  - id: NET-05
+    title: Armor and static-asset domains resolve internally, or are recorded in the worksheet
+    area: network
+    severity: warning
+    owner: Network / DNS
+    runsIn: workstation
+    scope: cluster
+    dependsOn: [WS-01]
+    needs: [domains.armor]
+    docLink: *prereq
+    remediation: Create internal DNS records for the Armor and static-asset domains.
+
+  - id: NET-06
+    title: Syslog TCP port reachable (only if configured)
+    area: network
+    severity: warning
+    owner: Network / SecOps
+    runsIn: probe
+    scope: nodePool
+    dependsOn: [NET-01]
+    needs: [syslog.host]
+    docLink: *prereq
+    remediation: Allow outbound TCP from the node pool subnet to the syslog host and port.
+
+  - id: NET-07
+    title: Node clock skew is under the threshold
+    area: network
+    severity: warning
+    owner: Platform
+    runsIn: probe
+    scope: nodePool
+    docLink: *prereq
+    remediation: Configure time synchronisation on the nodes (chrony or the Azure host time source).
+
+  # --- registry ----------------------------------------------------------
+  - id: REG-01
+    title: Registry credentials are issued and valid for the Fortanix registry
+    area: registry
+    severity: blocker
+    owner: Fortanix Support + platform
+    runsIn: workstation
+    scope: cluster
+    dependsOn: [WS-01]
+    needs: [registry.username]
+    needsEnv: [registry.passwordEnv]
+    docLink: *prereq
+    remediation: Ask Fortanix Support to issue or renew registry credentials, and check the username and password in use.
+
+  - id: REG-02
+    title: Operator Helm chart for the target Armor version is pullable
+    area: registry
+    severity: blocker
+    owner: Platform
+    runsIn: workstation
+    scope: cluster
+    dependsOn: [REG-01]
+    needs: [armorVersion]
+    docLink: *install
+    remediation: Confirm the registry credentials are entitled to the target Armor version, and that the chart can be fetched from the workstation.
+
+  - id: REG-03
+    title: Every image in the target release manifest resolves from each node pool
+    area: registry
+    severity: blocker
+    owner: Network + platform
+    runsIn: probe
+    scope: nodePool
+    dependsOn: [REG-01, NET-02]
+    docLink: *prereq
+    remediation: Allow this node pool to reach the registry and confirm the credentials are entitled to every image in the release.
+
+  - id: REG-04
+    title: "Mirror mode: every required image digest exists in the customer registry"
+    area: registry
+    severity: blocker
+    owner: Platform
+    runsIn: workstation
+    scope: cluster
+    dependsOn: [REG-01]
+    docLink: *install
+    remediation: Mirror each missing digest into the customer registry, then use the generated imageOverrides.
+
+  - id: REG-05
+    title: An image pull secret exists in each Armor namespace and is not about to expire
+    area: registry
+    severity: warning
+    owner: Platform
+    runsIn: workstation
+    scope: cluster
+    dependsOn: [REG-01]
+    docLink: *install
+    remediation: Create the image pull secret in each Armor namespace, and renew the credentials before they expire.
+
+  # --- backup ------------------------------------------------------------
+  - id: BAK-01
+    title: Backup storage account is StorageV2, Standard or Premium, LRS or better
+    area: backup
+    severity: blocker
+    nonProductionSeverity: warning
+    owner: Cloud admin
+    runsIn: workstation
+    scope: cluster
+    needs: [storage.accountFqdn, storage.accountKind, storage.performance, storage.replication]
+    docLink: *prereq
+    remediation: Use a StorageV2 account, Standard or Premium performance, with LRS or better redundancy.
+
+  - id: BAK-02
+    title: Backup credentials can write, read and delete a test blob in the target container
+    area: backup
+    severity: blocker
+    nonProductionSeverity: warning
+    owner: Cloud admin
+    runsIn: probe
+    scope: nodePool
+    dependsOn: [NET-02]
+    needs: [storage.accountFqdn, storage.container]
+    needsEnv: [storage.credentialsEnv]
+    docLink: *prereq
+    remediation: Grant the backup credentials write, read and delete access on the target container.
+
+  # --- pki ---------------------------------------------------------------
+  - id: PKI-01
+    title: Armor domain decided and recorded; MFA registrations bind to it
+    area: pki
+    severity: blocker
+    owner: Security + platform
+    runsIn: workstation
+    scope: cluster
+    needs: [domains.armor]
+    docLink: *prereq
+    remediation: Decide the Armor domain before install; MFA registrations bind to it and cannot move later.
+
+  - id: PKI-02
+    title: CA ready to sign the static UI certificate and the API CSR, with intermediates and root
+    area: pki
+    severity: blocker
+    owner: Security / PKI
+    runsIn: workstation
+    scope: cluster
+    needs: [certificates.caReady]
+    docLink: *prereq
+    remediation: Arrange for the CA to sign the static UI certificate and the API CSR, and collect the full chain (intermediates and root).
+
+  - id: PKI-03
+    title: Planned API SANs include api.<domain> for node-agent mTLS
+    area: pki
+    severity: blocker
+    owner: Security / PKI
+    runsIn: workstation
+    scope: cluster
+    needs: [domains.armor]
+    docLink: *prereq
+    remediation: Include api.<Armor domain> in the API certificate's subject alternative names.

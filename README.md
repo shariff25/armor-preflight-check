@@ -2,7 +2,7 @@
 
 `armor-preflight` checks whether a customer environment is ready for a Fortanix Armor on-prem install, before anyone starts the install. It checks every prerequisite from where Armor will actually run and tells each customer team what it needs to fix.
 
-> **Status: milestone M0 (skeleton).** The commands and flags exist and `version` works. `run`, `bundle` and `cleanup` exit with code 3 ("not implemented yet"). See [PLAN.md](PLAN.md) for the build order.
+> **Status: milestone M1.** The check catalog (all 35 Phase 1 checks), the engine and settings loading are in place. No check logic is implemented yet, so `run` reports every check as not implemented, prints `Result: INCOMPLETE` and exits 3. `bundle` and `cleanup` exit 3 ("not implemented yet"). See [PLAN.md](PLAN.md) for the build order.
 
 ## Commands
 
@@ -21,6 +21,22 @@
 | `-c`, `--context` | kube context | current context |
 | `-o`, `--output` | Output directory | `./preflight-out` |
 | `-t`, `--timeout` | Per-check timeout | `10s` |
+
+## Settings file
+
+The settings file holds the decisions only the customer can make: the target Armor version, domains, registry mode, backup storage, proxy and syslog. See [`examples/settings.example.yaml`](examples/settings.example.yaml). Without it, Preflight still runs and reports the checks that need those values as skipped, naming the missing setting.
+
+Secrets never go in the file. It names environment variables instead (`registry.passwordEnv`, `storage.credentialsEnv`), and a file that contains a secret-looking key is rejected.
+
+If `armorVersion` isn't covered by this build's catalog, Preflight refuses to run and says which Preflight release to use.
+
+## How checks run
+
+The catalog ([`internal/catalog/catalog.yaml`](internal/catalog/catalog.yaml)) defines every check: its severity, owning team, dependencies, remediation text and doc link. The engine runs checks in dependency order, with a per-check timeout (`-t`, default 10s).
+
+- If a parent check fails, its dependents report skipped and name the parent. This is per node pool: a failure on one pool doesn't hide results for another.
+- A violated warning-severity check reports warn.
+- A check that times out fails, rather than passing or being skipped.
 
 ## Exit codes
 

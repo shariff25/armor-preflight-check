@@ -12,7 +12,7 @@ import (
 
 func main() {
 	err := cli.NewRootCmd(os.Stdout, os.Stderr).Execute()
-	if err != nil {
+	if err != nil && !exitcode.IsQuiet(err) {
 		fmt.Fprintln(os.Stderr, "error:", err)
 	}
 	os.Exit(exitcode.FromError(err))

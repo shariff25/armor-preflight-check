@@ -59,7 +59,7 @@ func TestDefaults(t *testing.T) {
 }
 
 func TestUnimplementedCommandsExitToolError(t *testing.T) {
-	for _, args := range [][]string{{"run", "workstation"}, {"run", "cluster"}, {"bundle"}, {"cleanup"}} {
+	for _, args := range [][]string{{"bundle"}, {"cleanup"}} {
 		_, err := execute(args...)
 		if code := exitcode.FromError(err); code != exitcode.ToolError {
 			t.Errorf("%v: exit %d, want %d", args, code, exitcode.ToolError)

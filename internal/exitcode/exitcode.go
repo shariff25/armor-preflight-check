@@ -18,6 +18,9 @@ const (
 type Error struct {
 	Code int
 	Err  error
+	// Quiet means the command already reported the outcome, so main should
+	// exit with Code without printing Err.
+	Quiet bool
 }
 
 func (e *Error) Error() string { return e.Err.Error() }
@@ -25,6 +28,20 @@ func (e *Error) Unwrap() error { return e.Err }
 
 // ToolFailure wraps err as a Preflight failure (exit 3).
 func ToolFailure(err error) error { return &Error{Code: ToolError, Err: err} }
+
+// WithCode returns nil for Ready, or a quiet error carrying code.
+func WithCode(code int, reason string) error {
+	if code == Ready {
+		return nil
+	}
+	return &Error{Code: code, Err: errors.New(reason), Quiet: true}
+}
+
+// IsQuiet reports whether err has already been reported to the user.
+func IsQuiet(err error) bool {
+	var e *Error
+	return errors.As(err, &e) && e.Quiet
+}
 
 // FromError returns the exit code for err: 0 for nil, the carried code for
 // an *Error, and ToolError for anything else.

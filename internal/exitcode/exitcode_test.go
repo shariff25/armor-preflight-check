@@ -33,3 +33,13 @@ func TestCodesAreDistinct(t *testing.T) {
 		seen[c] = true
 	}
 }
+
+func TestWithCode(t *testing.T) {
+	if WithCode(Ready, "x") != nil {
+		t.Fatal("Ready should be nil")
+	}
+	err := WithCode(NotReady, "not ready")
+	if FromError(err) != NotReady || !IsQuiet(err) || IsQuiet(ToolFailure(errors.New("x"))) {
+		t.Fatalf("got %v", err)
+	}
+}

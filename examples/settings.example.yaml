@@ -1,0 +1,61 @@
+# Example armor-preflight settings file (-f). Every field is optional except
+# armorVersion. Without a settings file, Preflight still runs and reports the
+# checks that need these values as skipped.
+#
+# Secrets never go in this file. Name an environment variable instead
+# (registry.passwordEnv, storage.credentialsEnv) and export it before running.
+
+armorVersion: "1.0.404"
+
+# Optional: fail WS-01 unless the current kube context is this one.
+# kubeContext: aks-armor-prod
+
+# Optional: planned Armor replicas; the SGX pool needs at least this many nodes.
+# replicas: 3
+
+# Optional: namespaces Armor will be installed into (REG-05 looks for the
+# image pull secret in each).
+# armorNamespaces: [armor]
+
+# Optional: node pool subnets for firewall-request.csv. Kubernetes does not
+# expose them; without this the CSV lists node IPs.
+# nodePools:
+#   systempool: {subnet: 10.20.0.0/22}
+#   sgxpool1: {subnet: 10.20.4.0/22}
+
+domains:
+  armor: armor.example.com
+  staticAssets: static.armor.example.com
+
+certificates:
+  caReady: true
+  sampleApiCertPath: ./api-cert.pem    # optional, used by PKI-02 and PKI-03
+  # plannedApiSans: [api.armor.example.com]
+
+registry:
+  mode: direct                         # direct or mirror
+  url: cr.download.fortanix.com
+  username: example-user
+  passwordEnv: ARMOR_REGISTRY_PASSWORD
+  releaseManifestPath: ./armor-1.0.404-images.txt   # image references by digest
+
+storage:
+  accountFqdn: examplestorage.blob.core.windows.net
+  container: medusa
+  credentialsEnv: ARMOR_BACKUP_KEY
+  environment: production              # production or poc
+  accountKind: StorageV2               # BAK-01 (worksheet)
+  performance: Standard                # Standard or Premium
+  replication: LRS                     # LRS or better
+
+proxy:
+  httpsProxy: http://proxy.example.com:8080
+  noProxy: .example.com,10.0.0.0/8
+  # trustedCaPath: ./proxy-ca.pem      # NET-03: the intercepting proxy's CA
+
+attestation:
+  azureAttestationHost: ""             # regional host; CC-04 skips it until set
+
+syslog:
+  host: syslog.example.com
+  port: 514

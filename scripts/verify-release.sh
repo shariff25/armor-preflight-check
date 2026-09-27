@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Verifies a downloaded armor-preflight release, as a customer's security team
-# would. Works on Linux and macOS; needs cosign (and jq for the probe image).
+# would, on Linux or on a macOS laptop; needs cosign (and jq for the image).
 #
 #   scripts/verify-release.sh DIR
 #

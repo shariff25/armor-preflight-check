@@ -59,7 +59,7 @@ Of the 31 criteria:
 
 | Criterion | Status | Evidence |
 |---|---|---|
-| Binaries for Linux and macOS (amd64, arm64) download from the support portal without registry credentials | CI, plus Fortanix | `release-snapshot` builds all four archives. **Fortanix** uploads them to the support portal; the release workflow drafts a GitHub release. |
+| Binaries for Linux ~~and macOS~~ (amd64, arm64) download from the support portal without registry credentials | CI, plus Fortanix | **Amended:** Linux only, because Preflight runs on the machine Armor is deployed from (DECISIONS.md, M7). `release-snapshot` builds both Linux archives. **Fortanix** uploads them to the support portal; the release workflow drafts a GitHub release. |
 | The probe image pulls from a public registry and loads from a published tarball into a customer mirror | CI | The release workflow pushes the image to a public registry. `release-snapshot` pushes the published archive into a second registry, checks the digest is unchanged, then pulls the image and runs it. |
 | An unpullable probe image: the exact digest to mirror is named, and every workstation check still completes | CI | `TestClusterRunImagePullFailure` (the image is named, and all 23 workstation checks give the same result as a workstation run), `TestImagePullFailure`, `TestNodeProbePullFailureNamesTheNode` |
 

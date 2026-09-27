@@ -5,7 +5,7 @@ DATE     ?= $(shell date -u +%Y-%m-%dT%H:%M:%SZ)
 LDFLAGS  := -s -w -X $(PKG)/internal/buildinfo.Version=$(VERSION) \
             -X $(PKG)/internal/buildinfo.Commit=$(COMMIT) \
             -X $(PKG)/internal/buildinfo.Date=$(DATE)
-PLATFORMS := linux/amd64 linux/arm64 darwin/amd64 darwin/arm64
+PLATFORMS := linux/amd64 linux/arm64
 
 .PHONY: build test lint cross clean probe-image audit-lab release-snapshot
 
@@ -19,7 +19,7 @@ lint:
 	@test -z "$$(gofmt -l .)" || (gofmt -l . && echo "gofmt needed" && exit 1)
 	go vet ./...
 
-# Static binaries for the four release targets. Releases use
+# Static binaries for the two release targets. Releases use
 # scripts/release.sh, which also signs and writes checksums and SBOMs.
 cross:
 	@for p in $(PLATFORMS); do \

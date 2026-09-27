@@ -2,7 +2,7 @@
 # Builds a complete, signed release into build/release/:
 #
 #   1. the probe image: built, pushed, signed (scripts/probe-release.sh)
-#   2. the binaries for Linux and macOS, amd64 and arm64, with that image's
+#   2. the Linux binaries, amd64 and arm64, with that image's
 #      digest built in as the default probe image; archives, SBOMs and
 #      checksums.txt (goreleaser)
 #   3. checksums.txt signed (scripts/sign.sh). It lists every other file, so

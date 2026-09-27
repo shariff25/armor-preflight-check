@@ -1,6 +1,6 @@
 # armor-preflight: security brief
 
-`armor-preflight` checks that your environment meets the prerequisites for a Fortanix Armor on-prem install. It runs from an operator's workstation against your Kubernetes cluster, reports what's missing and who needs to fix it, and changes nothing that it doesn't remove itself. This page is for the security team approving it. The full review is in [SECURITY-REVIEW.md](SECURITY-REVIEW.md).
+`armor-preflight` checks that your environment meets the prerequisites for a Fortanix Armor on-prem install. It is a single static Linux binary (amd64 or arm64). It runs on the machine Armor will be deployed from, against your Kubernetes cluster, reports what's missing and who needs to fix it, and changes nothing that it doesn't remove itself. This page is for the security team approving it. The full review is in [SECURITY-REVIEW.md](SECURITY-REVIEW.md).
 
 **It never sends data to Fortanix or anyone else.** It has no telemetry, no update check and no licence call. Results stay in a local directory until you choose to share them.
 

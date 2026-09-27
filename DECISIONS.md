@@ -231,7 +231,7 @@ The user chose not to gate the build on D-1 to D-3, so the plan's defaults apply
   - every GitHub Action.
 
   Tool versions (cosign, syft, goreleaser, crane) are pinned by version.
-- **macOS binaries aren't notarised.** Files fetched with `curl` aren't quarantined, so they run. Apple notarisation needs a Fortanix Apple Developer ID and can be added to the release when Fortanix has one.
+- **Linux only (amd64, arm64), with no macOS build.** This is a product owner decision, changing the brief's "Linux and macOS" deliverable and R1.5. Preflight runs on the machine Armor will be deployed from, which is Linux, so macOS binaries would only add build, signing and notarisation work with no user. `scripts/verify-release.sh` still runs on macOS, so a security team can verify a download on a laptop before copying it to the target machine.
 
 **Acceptance**
 

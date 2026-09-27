@@ -10,7 +10,7 @@ builds:
     binary: armor-preflight
     env: [CGO_ENABLED=0]
     flags: [-trimpath]
-    goos: [linux, darwin]
+    goos: [linux] # runs on the machine Armor is deployed from (DECISIONS: M7)
     goarch: [amd64, arm64]
     # The commit time, so rebuilding a commit reproduces the same binaries.
     mod_timestamp: "{{ .CommitTimestamp }}"

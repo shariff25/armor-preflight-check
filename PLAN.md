@@ -38,7 +38,7 @@ armor-preflight/
     fixtures/                          # fake-clientset fixtures, one per failing check
     netfixtures/                       # local DNS/TCP/TLS/HTTP servers, intercepting proxy
     e2e/                               # kind-based: audit log, cleanup, PSS (CI job)
-  .goreleaser.yaml                     # 4 targets, cosign, syft SBOM, checksums
+  .goreleaser.yaml                     # Linux amd64/arm64, syft SBOM, checksums
   README.md  DECISIONS.md  SECURITY-BRIEF.md
 ```
 

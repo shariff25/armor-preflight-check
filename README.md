@@ -133,7 +133,7 @@ CI runs the lab on every change.
 ## Verifying a release
 
 Each release ships:
-- the four binary archives, each with an SPDX SBOM;
+- the two Linux binary archives (amd64, arm64), each with an SPDX SBOM;
 - the probe image archive and an SBOM for each of its platforms;
 - `probe-image.txt`, the signed image's reference;
 - `checksums.txt`, which lists every other file;
@@ -169,7 +169,7 @@ Requires Go 1.26.8 or later. Go supports only its two newest major releases, and
 make build    # bin/armor-preflight
 make test
 make lint     # gofmt + go vet
-make cross    # static binaries for linux/darwin × amd64/arm64
+make cross    # static Linux binaries for amd64 and arm64
 ```
 
 Releases come from [`scripts/release.sh`](scripts/release.sh), run by the release workflow when a tag `armor-preflight/vX.Y.Z` is pushed. It:

@@ -36,6 +36,9 @@ const ReasonNotImplemented = "not implemented in this build"
 type Topology struct {
 	// Pools maps each node pool to its node names.
 	Pools map[string][]string
+	// NodeIPs maps each node to its InternalIP, for firewall requests when
+	// the pool subnet is not in the settings.
+	NodeIPs map[string]string
 }
 
 // PoolOf returns the pool a node belongs to, or "".

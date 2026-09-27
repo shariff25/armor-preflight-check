@@ -6,7 +6,6 @@ import (
 	"io"
 	"os"
 	"os/signal"
-	"strings"
 	"syscall"
 	"time"
 
@@ -18,6 +17,8 @@ import (
 	"github.com/shariff25/agent-goverance-OS/armor-preflight/internal/engine"
 	"github.com/shariff25/agent-goverance-OS/armor-preflight/internal/exitcode"
 	"github.com/shariff25/agent-goverance-OS/armor-preflight/internal/model"
+	"github.com/shariff25/agent-goverance-OS/armor-preflight/internal/output"
+	"github.com/shariff25/agent-goverance-OS/armor-preflight/internal/redact"
 	"github.com/shariff25/agent-goverance-OS/armor-preflight/internal/settings"
 )
 
@@ -67,7 +68,8 @@ func newRunModeCmd(g *globalOptions, mode engine.Mode, short string) *cobra.Comm
 	return cmd
 }
 
-func (o *runOptions) run(ctx context.Context, out io.Writer) error {
+func (o *runOptions) run(ctx context.Context, stdout io.Writer) (err error) {
+	started := now()
 	if o.checkTimeout <= 0 {
 		return exitcode.ToolFailure(fmt.Errorf("--timeout must be positive, got %s", o.checkTimeout))
 	}
@@ -85,7 +87,15 @@ func (o *runOptions) run(ctx context.Context, out io.Writer) error {
 		}
 	}
 
-	runID := model.NewRunID(now())
+	// From here on, everything printed, written or returned is redacted.
+	red := newRedactor(st)
+	out := redact.NewWriter(red, stdout)
+	defer func() {
+		out.Flush()
+		err = red.Error(err)
+	}()
+
+	runID := model.NewRunID(started)
 	env := &engine.Env{
 		Mode:         o.mode,
 		Catalog:      cat,
@@ -98,45 +108,37 @@ func (o *runOptions) run(ctx context.Context, out io.Writer) error {
 		return exitcode.ToolFailure(err)
 	}
 
-	printSummary(out, runID, o.mode, st, rep)
+	rec := output.NewRecord(
+		output.Tool{Version: buildinfo.Version, Commit: buildinfo.Commit, CatalogVersion: cat.CatalogVersion},
+		output.Target{ArmorVersion: st.ArmorVersion, KubeContext: o.kubeContext},
+		output.RunInfo{ID: runID, Mode: string(o.mode), StartedAt: started.UTC()},
+		rep.Results, rep.Unimplemented, rep.InternalErrors)
+	rec.Duration(now().Sub(started))
+
+	files, werr := output.WriteFiles(o.outputDir, rec, output.FirewallInputs{Catalog: cat, Settings: st, Topology: env.Topology}, red)
+	output.WriteTerminal(out, rec, files)
+	if werr != nil {
+		return exitcode.ToolFailure(werr)
+	}
 
 	if len(rep.InternalErrors) > 0 {
-		return exitcode.ToolFailure(fmt.Errorf("Preflight hit %d internal error(s); the result cannot be trusted:\n  %s",
-			len(rep.InternalErrors), strings.Join(rep.InternalErrors, "\n  ")))
+		return exitcode.ToolFailure(fmt.Errorf("Preflight hit %d internal error(s), so the result cannot be trusted", len(rep.InternalErrors)))
 	}
 	if len(rep.Unimplemented) > 0 {
-		return exitcode.ToolFailure(fmt.Errorf("this build does not implement %d of %d checks (%s), so the verdict is incomplete",
-			len(rep.Unimplemented), len(cat.Checks), strings.Join(rep.Unimplemented, ", ")))
+		return exitcode.ToolFailure(fmt.Errorf("this build does not implement %d of %d checks, so the verdict is incomplete",
+			len(rep.Unimplemented), len(cat.Checks)))
 	}
 	v := rep.Verdict()
 	return exitcode.WithCode(v.ExitCode(), v.Display())
 }
 
-// printSummary is a plain summary; milestone M2 replaces it with the full
-// terminal report and file outputs.
-func printSummary(out io.Writer, runID string, mode engine.Mode, st *settings.Settings, rep *engine.Report) {
-	target := "no settings file"
-	if st.ArmorVersion != "" {
-		target = "Armor " + st.ArmorVersion
+// newRedactor registers every secret the settings name, including the
+// user:password form that ends up base64-encoded in docker auth strings.
+func newRedactor(st *settings.Settings) *redact.Redactor {
+	sec := st.ResolveSecrets(lookupEnv)
+	red := redact.New(sec.Values()...)
+	if sec.RegistryPassword != "" && st.Registry.Username != "" {
+		red.Add(st.Registry.Username + ":" + sec.RegistryPassword)
 	}
-	fmt.Fprintf(out, "armor-preflight %s  run %s  %s mode  %s\n\n", buildinfo.Version, runID, mode, target)
-	for _, r := range rep.Results {
-		if r.Status == model.StatusPass {
-			continue
-		}
-		detail := ""
-		if r.SkippedReason != nil {
-			detail = *r.SkippedReason
-		} else if len(r.Evidence) > 0 {
-			detail = r.Evidence[0].Detail
-		}
-		fmt.Fprintf(out, "  %-7s %-7s %-22s %s\n", strings.ToUpper(string(r.Status)), r.ID, r.Scope, detail)
-	}
-	c := model.Count(rep.Results)
-	verdict := rep.Verdict().Display()
-	if len(rep.Unimplemented) > 0 || len(rep.InternalErrors) > 0 {
-		verdict = "INCOMPLETE"
-	}
-	fmt.Fprintf(out, "\nResult: %s  (pass %d, fail %d, warn %d, skipped %d, info %d)\n",
-		verdict, c.Pass, c.Fail, c.Warn, c.Skipped, c.Info)
+	return red
 }

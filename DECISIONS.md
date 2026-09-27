@@ -54,3 +54,28 @@ The user chose not to gate the build on D-1 to D-3, so the plan's defaults apply
 - **Interrupts.** Ctrl-C or SIGTERM stops the run between dependency levels and exits 3. Probe cleanup on interrupt comes with M4.
 - **SGX node pool size.** The brief says "DC8_v3", which isn't an exact Azure SKU name (the family is DCsv3/DCdsv3, for example `Standard_DC8s_v3`). The catalog keeps the brief's wording, and K8S-03 in M3 will match on the DCsv3 family and size rather than an exact string. This needs confirming with Fortanix.
 - **cert-manager supported versions** are `TBD` in the catalog. K8S-08 will check that cert-manager is installed and has a ready ClusterIssuer, and will name the missing version range until Fortanix supplies one.
+
+## M2
+
+- **`result.json` schema.** `schema/result.v1.json` (JSON Schema 2020-12) is the contract for Support tooling. A test validates every run's JSON against it, and another checks that the schema rejects broken records.
+  - Within version 1, fields may be added but not removed or renamed, and consumers should ignore fields they don't know. Any removal or rename bumps `schemaVersion`.
+  - Version 1 adds three fields to the brief's outline: `unimplemented`, `internalErrors`, and a verdict value `INCOMPLETE` for runs that exit 3.
+- **Result scope in JSON.** The scope is an object with exactly one key: `{"cluster": true}`, `{"nodePool": "..."}` or `{"node": "..."}`. This matches the brief's `{"nodePool": "sgxpool1"}` example.
+- **Report links.** `report.html` has no scripts, stylesheets, images, fonts or `url()`, so opening it loads nothing. Doc links are plain `<a href>` links to support.fortanix.com. They load nothing until clicked, and a test fails on any other link.
+- **What each team section shows.** Each team section lists that team's failed and warned results, then the checks that weren't run for that team, with the reason. An appendix lists every result, the probes that ran and the permissions used.
+- **Firewall CSV rows.** A row is written only for failed TCP or TLS stages, because a DNS or HTTP failure doesn't need a firewall rule. One row per (node pool, destination, port).
+  - When NET-02 and a more specific check report the same path, the row names the specific check (for example CC-03 for PCCS), as in the brief's example.
+  - The header row is always written, even with no failures.
+  - Source subnet comes from `nodePools.<pool>.subnet`. Without it, the node IPs are listed as /32s. Without those, the cell says `UNKNOWN (node pool X; set nodePools.X.subnet)`, which a network engineer can't mistake for a real subnet.
+- **Terminal output has no colour.** The output is often pasted into tickets, and plain text survives that.
+- **How secrets are masked.** Every secret the settings name is masked everywhere: stdout, error messages, all three output files and the bundle. Each secret is also masked in its base64 and URL-encoded forms, and as `username:password`, which is how it appears in docker auth strings.
+  - Secrets are masked however short they are. A very short secret masks some ordinary text too, but the alternative risks a leak.
+  - `TestSeededSecretsNeverAppear` has fake checks leak canary secrets in several encodings, including through a panic, and fails the build if any form appears anywhere. With masking switched off, the test reports 21 leaks, so it would catch one.
+- **What the bundle contains.** `bundle.tgz` holds `result.json`, `versions.json` (tool, catalog, target, run ID, mode, start time, duration, verdict, probes) and `MANIFEST.txt` with SHA-256 hashes. It contains no logs, no HTML report and no settings file.
+  - `bundle` masks secrets again. With `-f`, it also masks the secrets the settings file names.
+  - It refuses to write the bundle if the content looks like a private key or a docker `auths` block.
+- **How the bundle is confirmed.** `bundle` lists the contents first, then asks before writing. `--list` only lists, and `--yes` skips the question.
+  - Answering no exits 0.
+  - With no answer (a non-interactive run without `--yes`), it exits 3, so a script can't assume the bundle was written.
+- **File writes are atomic** (a temp file, then rename), so an interrupted run never leaves a half-written report.
+- **An incomplete run still writes its outputs.** A run that exits 3 because of unimplemented checks or internal errors still writes all three files with verdict `INCOMPLETE`. A refused run (settings rejected, or the Armor version isn't covered) writes nothing.

@@ -1,0 +1,127 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Armor Preflight {{.Rec.VerdictDisplay}} ({{.Rec.Run.ID}})</title>
+<style>
+:root { --fg:#1b1f24; --muted:#5b6470; --line:#d8dde3; --bg:#ffffff; --panel:#f5f7f9;
+        --fail:#b42318; --fail-bg:#fdecea; --warn:#8a5a00; --warn-bg:#fff4dc;
+        --pass:#1a7f37; --pass-bg:#e7f5ea; --skip:#57606a; --skip-bg:#eef0f2; --info:#0b5cad; --info-bg:#e6f0fb; }
+* { box-sizing: border-box; }
+body { margin:0; font:14px/1.5 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif; color:var(--fg); background:var(--bg); }
+main { max-width: 1080px; margin: 0 auto; padding: 24px 16px 48px; }
+h1 { font-size: 22px; margin: 0 0 4px; }
+h2 { font-size: 18px; margin: 32px 0 8px; padding-bottom: 6px; border-bottom: 1px solid var(--line); }
+h3 { font-size: 15px; margin: 0; }
+.meta { color: var(--muted); margin: 0 0 20px; }
+.verdict { display:inline-block; font-weight:700; font-size:20px; padding:8px 16px; border-radius:6px; margin: 8px 0 16px; }
+.v-READY { background:var(--pass-bg); color:var(--pass); }
+.v-READY_WITH_WARNINGS { background:var(--warn-bg); color:var(--warn); }
+.v-NOT_READY, .v-INCOMPLETE { background:var(--fail-bg); color:var(--fail); }
+table { border-collapse: collapse; width: 100%; margin: 8px 0; }
+th, td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--line); vertical-align: top; }
+th { background: var(--panel); font-weight: 600; }
+td.n, th.n { text-align: right; font-variant-numeric: tabular-nums; }
+.table-wrap { overflow-x: auto; }
+.badge { display:inline-block; font-size:12px; font-weight:700; padding:1px 8px; border-radius:10px; text-transform:uppercase; white-space:nowrap; }
+.s-fail { background:var(--fail-bg); color:var(--fail); }
+.s-warn { background:var(--warn-bg); color:var(--warn); }
+.s-pass { background:var(--pass-bg); color:var(--pass); }
+.s-skipped { background:var(--skip-bg); color:var(--skip); }
+.s-info { background:var(--info-bg); color:var(--info); }
+.team { margin-top: 32px; }
+.finding { border:1px solid var(--line); border-radius:6px; padding:12px 14px; margin:12px 0; break-inside: avoid; }
+.finding .head { display:flex; gap:10px; align-items:baseline; flex-wrap:wrap; }
+.finding .scope { color: var(--muted); }
+.finding .fix { margin: 8px 0 0; }
+.finding .doc { color: var(--muted); font-size: 12px; word-break: break-all; }
+.evidence td { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 12px; word-break: break-word; }
+.skips li { margin: 2px 0; }
+code { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 12px; }
+.note { color: var(--muted); }
+@media print {
+  main { max-width: none; padding: 0; }
+  .team { break-before: page; }
+  .appendix { break-before: page; }
+  .finding { border-color: #999; }
+}
+</style>
+</head>
+<body>
+<main>
+<header>
+  <h1>Armor Preflight report</h1>
+  <p class="meta">
+    Run {{.Rec.Run.ID}} &middot; {{.Rec.Run.Mode}} mode &middot; started {{.Rec.Run.StartedAt.Format "2006-01-02 15:04:05 UTC"}} &middot; {{.Rec.Run.DurationSeconds}}s<br>
+    Target: {{if .Rec.Target.ArmorVersion}}Armor {{.Rec.Target.ArmorVersion}}{{else}}no settings file{{end}}{{if .Rec.Target.KubeContext}} &middot; context {{.Rec.Target.KubeContext}}{{end}}{{if .Rec.Target.KubernetesVersion}} &middot; Kubernetes {{.Rec.Target.KubernetesVersion}}{{end}}<br>
+    Preflight {{.Rec.Tool.Version}} &middot; catalog {{.Rec.Tool.CatalogVersion}}
+  </p>
+  <div class="verdict v-{{.Rec.Verdict}}">{{.Rec.VerdictDisplay}}</div>
+  {{if .Rec.Unimplemented}}<p class="note">This build does not implement {{len .Rec.Unimplemented}} checks ({{join .Rec.Unimplemented ", "}}), so the result is incomplete.</p>{{end}}
+  {{if .Rec.InternalErrors}}<p class="note">Preflight hit internal errors; please send this report to Fortanix Support.</p>
+  <ul>{{range .Rec.InternalErrors}}<li><code>{{firstLine .}}</code></li>{{end}}</ul>{{end}}
+</header>
+
+<section>
+  <h2>Results by severity</h2>
+  <div class="table-wrap"><table>
+    <tr><th>Severity</th><th class="n">Pass</th><th class="n">Fail</th><th class="n">Warn</th><th class="n">Skipped</th><th class="n">Info</th></tr>
+    {{range .BySeverity}}<tr><td>{{.Severity}}</td><td class="n">{{.Counts.Pass}}</td><td class="n">{{.Counts.Fail}}</td><td class="n">{{.Counts.Warn}}</td><td class="n">{{.Counts.Skipped}}</td><td class="n">{{.Counts.Info}}</td></tr>
+    {{end}}
+  </table></div>
+  <h2>Results by area</h2>
+  <div class="table-wrap"><table>
+    <tr><th>Area</th><th class="n">Pass</th><th class="n">Fail</th><th class="n">Warn</th><th class="n">Skipped</th><th class="n">Info</th></tr>
+    {{range .ByArea}}<tr><td>{{.Area}}</td><td class="n">{{.Counts.Pass}}</td><td class="n">{{.Counts.Fail}}</td><td class="n">{{.Counts.Warn}}</td><td class="n">{{.Counts.Skipped}}</td><td class="n">{{.Counts.Info}}</td></tr>
+    {{end}}
+  </table></div>
+</section>
+
+{{if not .Teams}}<p>Nothing needs attention.</p>{{end}}
+{{range .Teams}}
+<section class="team" id="team-{{anchor .Owner}}">
+  <h2>{{.Owner}}</h2>
+  <p class="note">{{len .ToFix}} to fix{{if .Blockers}}, {{.Blockers}} of them blocking the install{{end}}{{if .Skipped}}; {{len .Skipped}} not checked{{end}}.</p>
+  {{range .ToFix}}{{template "finding" .}}{{end}}
+  {{if .Skipped}}
+  <h3>Not checked</h3>
+  <ul class="skips">{{range .Skipped}}<li><strong>{{.ID}}</strong> {{.Title}} ({{scope .Scope}}): {{deref .SkippedReason}}</li>{{end}}</ul>
+  {{end}}
+</section>
+{{end}}
+
+<section class="appendix">
+  <h2>All results</h2>
+  <div class="table-wrap"><table>
+    <tr><th>Check</th><th>Status</th><th>Severity</th><th>Scope</th><th>Owner</th><th>Detail</th></tr>
+    {{range .Rec.Results}}<tr><td><strong>{{.ID}}</strong> {{.Title}}</td><td><span class="badge s-{{.Status}}">{{.Status}}</span></td><td>{{.Severity}}</td><td>{{scope .Scope}}</td><td>{{.Owner}}</td><td>{{summary .}}</td></tr>
+    {{end}}
+  </table></div>
+
+  <h2>Probes and permissions</h2>
+  {{if .Rec.Probes}}
+  <div class="table-wrap"><table>
+    <tr><th>Node pool</th><th>Node</th><th>Pod</th><th>Image</th><th>Digest</th></tr>
+    {{range .Rec.Probes}}<tr><td>{{.NodePool}}</td><td>{{.Node}}</td><td>{{.Pod}}</td><td><code>{{.Image}}</code></td><td><code>{{.ImageDigest}}</code></td></tr>
+    {{end}}
+  </table></div>
+  {{else}}<p class="note">No probe pods ran{{if eq .Rec.Run.Mode "workstation"}} (workstation mode makes no changes to the cluster){{end}}.</p>{{end}}
+  {{if .Rec.RBAC}}<p>Permissions used:</p><ul>{{range .Rec.RBAC}}<li><code>{{.}}</code></li>{{end}}</ul>
+  {{else}}<p class="note">No Kubernetes permissions were recorded for this run.</p>{{end}}
+</section>
+</main>
+</body>
+</html>
+{{define "finding"}}
+<div class="finding">
+  <div class="head"><span class="badge s-{{.Status}}">{{.Status}}</span><h3>{{.ID}} {{.Title}}</h3><span class="scope">{{scope .Scope}} &middot; {{.Severity}}</span></div>
+  <div class="table-wrap"><table class="evidence">
+    <tr><th>Stage</th><th>Target</th><th>OK</th><th>Detail</th></tr>
+    {{range .Evidence}}<tr><td>{{.Stage}}</td><td>{{.Target}}</td><td>{{if .OK}}yes{{else}}no{{end}}</td><td>{{.Detail}}</td></tr>
+    {{end}}
+  </table></div>
+  <p class="fix"><strong>Fix:</strong> {{.Remediation}}</p>
+  <p class="doc">Docs: <a href="{{.DocLink}}">{{.DocLink}}</a>{{if .DependsOn}} &middot; depends on {{join .DependsOn ", "}}{{end}}</p>
+</div>
+{{end}}

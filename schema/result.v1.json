@@ -1,0 +1,119 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/shariff25/agent-goverance-OS/armor-preflight/schema/result.v1.json",
+  "title": "Armor Preflight result, schema version 1",
+  "description": "Written to result.json by every run. Within version 1, fields may be added but never removed or renamed; consumers must ignore fields they do not know.",
+  "type": "object",
+  "required": ["schemaVersion", "tool", "target", "run", "verdict", "counts", "results", "unimplemented", "internalErrors", "probes", "rbac"],
+  "properties": {
+    "schemaVersion": { "const": "1" },
+    "tool": {
+      "type": "object",
+      "required": ["version", "commit", "catalogVersion"],
+      "properties": {
+        "version": { "type": "string", "minLength": 1 },
+        "commit": { "type": "string" },
+        "catalogVersion": { "type": "string", "minLength": 1 }
+      }
+    },
+    "target": {
+      "type": "object",
+      "required": ["armorVersion", "kubeContext", "kubernetesVersion"],
+      "properties": {
+        "armorVersion": { "type": "string" },
+        "kubeContext": { "type": "string" },
+        "kubernetesVersion": { "type": "string" }
+      }
+    },
+    "run": {
+      "type": "object",
+      "required": ["id", "mode", "startedAt", "durationSeconds"],
+      "properties": {
+        "id": { "type": "string", "pattern": "^[0-9]{8}-[0-9]{4}-[0-9a-f]{4}$" },
+        "mode": { "enum": ["workstation", "cluster"] },
+        "startedAt": { "type": "string", "format": "date-time" },
+        "durationSeconds": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "verdict": {
+      "description": "INCOMPLETE means Preflight could not finish every check; the run exits 3.",
+      "enum": ["READY", "READY_WITH_WARNINGS", "NOT_READY", "INCOMPLETE"]
+    },
+    "counts": {
+      "type": "object",
+      "required": ["pass", "fail", "warn", "skipped", "info"],
+      "properties": {
+        "pass": { "type": "integer", "minimum": 0 },
+        "fail": { "type": "integer", "minimum": 0 },
+        "warn": { "type": "integer", "minimum": 0 },
+        "skipped": { "type": "integer", "minimum": 0 },
+        "info": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "results": { "type": "array", "items": { "$ref": "#/$defs/result" } },
+    "unimplemented": { "type": "array", "items": { "$ref": "#/$defs/checkId" } },
+    "internalErrors": { "type": "array", "items": { "type": "string" } },
+    "probes": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["nodePool", "pod", "image", "imageDigest"],
+        "properties": {
+          "nodePool": { "type": "string" },
+          "node": { "type": "string" },
+          "pod": { "type": "string" },
+          "image": { "type": "string" },
+          "imageDigest": { "type": "string" }
+        }
+      }
+    },
+    "rbac": { "type": "array", "items": { "type": "string" } }
+  },
+  "$defs": {
+    "checkId": { "type": "string", "pattern": "^[A-Z0-9]+-[0-9]{2}$" },
+    "result": {
+      "type": "object",
+      "required": ["id", "title", "area", "severity", "status", "scope", "evidence", "remediation", "owner", "docLink", "dependsOn", "skippedReason"],
+      "properties": {
+        "id": { "$ref": "#/$defs/checkId" },
+        "title": { "type": "string", "minLength": 1 },
+        "area": { "enum": ["workstation", "kubernetes", "confidential-computing", "network", "registry", "backup", "pki"] },
+        "severity": { "enum": ["blocker", "warning", "info"] },
+        "status": { "enum": ["pass", "fail", "warn", "skipped", "info"] },
+        "scope": {
+          "type": "object",
+          "minProperties": 1,
+          "maxProperties": 1,
+          "properties": {
+            "cluster": { "const": true },
+            "nodePool": { "type": "string", "minLength": 1 },
+            "node": { "type": "string", "minLength": 1 }
+          },
+          "additionalProperties": false
+        },
+        "evidence": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "required": ["stage", "ok", "detail"],
+            "properties": {
+              "stage": { "type": "string", "minLength": 1 },
+              "target": { "type": "string" },
+              "ok": { "type": "boolean" },
+              "detail": { "type": "string" }
+            }
+          }
+        },
+        "remediation": { "type": "string", "minLength": 1 },
+        "owner": { "type": "string", "minLength": 1 },
+        "docLink": { "type": "string", "pattern": "^https://" },
+        "dependsOn": { "type": "array", "items": { "$ref": "#/$defs/checkId" } },
+        "skippedReason": { "type": ["string", "null"] }
+      },
+      "if": { "properties": { "status": { "const": "skipped" } } },
+      "then": { "properties": { "skippedReason": { "type": "string", "minLength": 1 } } },
+      "else": { "properties": { "skippedReason": { "type": "null" } } }
+    }
+  }
+}

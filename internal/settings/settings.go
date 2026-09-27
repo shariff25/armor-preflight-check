@@ -294,3 +294,10 @@ func joinPath(prefix, name string) string {
 	}
 	return prefix + "." + name
 }
+
+// GetInt returns the integer value at a dotted path, or 0.
+func (s *Settings) GetInt(path string) int {
+	v, _ := s.lookup(path)
+	f, _ := v.(float64)
+	return int(f)
+}

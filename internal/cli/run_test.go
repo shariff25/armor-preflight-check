@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
 
@@ -11,6 +12,7 @@ import (
 	"github.com/shariff25/agent-goverance-OS/armor-preflight/internal/engine"
 	"github.com/shariff25/agent-goverance-OS/armor-preflight/internal/exitcode"
 	"github.com/shariff25/agent-goverance-OS/armor-preflight/internal/model"
+	"github.com/shariff25/agent-goverance-OS/armor-preflight/internal/output"
 )
 
 const settingsYAML = `armorVersion: "1.0.404"
@@ -31,6 +33,16 @@ func writeSettings(t *testing.T, body string) string {
 	return p
 }
 
+func scopeFor(def *catalog.Check) model.Scope {
+	switch def.Scope {
+	case catalog.ScopeNodePool:
+		return model.PoolScope("sgxpool1")
+	case catalog.ScopeNode:
+		return model.NodeScope("sgx-0")
+	}
+	return model.ClusterScope()
+}
+
 // fakeRegistry passes every check except those in statuses.
 func fakeRegistry(statuses map[string]model.Status) func() engine.Registry {
 	return func() engine.Registry {
@@ -43,25 +55,20 @@ func fakeRegistry(statuses map[string]model.Status) func() engine.Registry {
 				st = s
 			}
 			reg[def.ID] = func(context.Context, *engine.Env, *catalog.Check) []model.Result {
-				scope := model.ClusterScope()
-				switch def.Scope {
-				case catalog.ScopeNodePool:
-					scope = model.PoolScope("sgxpool1")
-				case catalog.ScopeNode:
-					scope = model.NodeScope("sgx-0")
-				}
-				return []model.Result{{Status: st, Scope: scope, Evidence: []model.Evidence{{Stage: "observed", OK: st == model.StatusPass, Detail: "fake"}}}}
+				return []model.Result{{Status: st, Scope: scopeFor(&def), Evidence: []model.Evidence{{Stage: "observed", OK: st == model.StatusPass, Detail: "fake"}}}}
 			}
 		}
 		return reg
 	}
 }
 
-func withFakes(t *testing.T, statuses map[string]model.Status) {
+var testEnv = map[string]string{"REG_PW": "test-registry-password", "BAK_KEY": "test-storage-key"}
+
+func withFakes(t *testing.T, reg func() engine.Registry) {
 	t.Helper()
 	oldReg, oldEnv := registry, lookupEnv
-	registry = fakeRegistry(statuses)
-	lookupEnv = func(k string) (string, bool) { return map[string]string{"REG_PW": "pw", "BAK_KEY": "k"}[k], true }
+	registry = reg
+	lookupEnv = func(k string) (string, bool) { v, ok := testEnv[k]; return v, ok }
 	t.Cleanup(func() { registry, lookupEnv = oldReg, oldEnv })
 }
 
@@ -73,44 +80,79 @@ func TestRunExitCodes(t *testing.T) {
 		want     int
 		verdict  string
 	}{
-		{"ready", "cluster", nil, exitcode.Ready, "Result: READY "},
-		{"warnings", "cluster", map[string]model.Status{"NET-07": model.StatusFail}, exitcode.ReadyWithWarnings, "Result: READY WITH WARNINGS"},
-		{"not ready", "cluster", map[string]model.Status{"K8S-05": model.StatusFail}, exitcode.NotReady, "Result: NOT READY"},
-		{"workstation ready", "workstation", nil, exitcode.Ready, "Result: READY "},
+		{"ready", "cluster", nil, exitcode.Ready, "READY"},
+		{"warnings", "cluster", map[string]model.Status{"NET-07": model.StatusFail}, exitcode.ReadyWithWarnings, "READY_WITH_WARNINGS"},
+		{"not ready", "cluster", map[string]model.Status{"K8S-05": model.StatusFail}, exitcode.NotReady, "NOT_READY"},
+		{"workstation ready", "workstation", nil, exitcode.Ready, "READY"},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			withFakes(t, c.statuses)
-			out, err := execute("run", c.mode, "-f", writeSettings(t, settingsYAML))
+			withFakes(t, fakeRegistry(c.statuses))
+			dir := t.TempDir()
+			out, err := execute("run", c.mode, "-f", writeSettings(t, settingsYAML), "-o", dir)
 			if got := exitcode.FromError(err); got != c.want {
 				t.Fatalf("exit %d, want %d (%v)\n%s", got, c.want, err, out)
 			}
-			if !strings.Contains(out, c.verdict) {
-				t.Fatalf("missing %q in:\n%s", c.verdict, out)
+			rec, err := output.ReadRecord(dir)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if rec.Verdict != c.verdict || rec.Run.Mode != c.mode || rec.Target.ArmorVersion != "1.0.404" {
+				t.Fatalf("record: %s %s %s", rec.Verdict, rec.Run.Mode, rec.Target.ArmorVersion)
+			}
+			display := model.Verdict(c.verdict).Display()
+			if !regexp.MustCompile(`(?m)^  ` + display + `   `).MatchString(out) {
+				t.Fatalf("terminal missing verdict %q:\n%s", display, out)
 			}
 		})
 	}
 }
 
+// R1.3: every run writes a terminal summary, the HTML report, the JSON
+// result and the firewall-request CSV.
+func TestRunWritesAllOutputs(t *testing.T) {
+	withFakes(t, fakeRegistry(map[string]model.Status{"NET-02": model.StatusFail}))
+	dir := filepath.Join(t.TempDir(), "nested", "out")
+	out, _ := execute("run", "cluster", "-f", writeSettings(t, settingsYAML), "-o", dir, "-c", "aks-armor-prod")
+	for _, f := range []string{output.ResultFile, output.ReportFile, output.FirewallFile} {
+		if _, err := os.Stat(filepath.Join(dir, f)); err != nil {
+			t.Errorf("%s not written: %v", f, err)
+		}
+	}
+	for _, want := range []string{"To fix, by team", "Network", "NET-02", "Wrote " + filepath.Join(dir, output.ResultFile)} {
+		if !strings.Contains(out, want) {
+			t.Errorf("terminal missing %q", want)
+		}
+	}
+	rec, _ := output.ReadRecord(dir)
+	if rec.Target.KubeContext != "aks-armor-prod" {
+		t.Errorf("context %q", rec.Target.KubeContext)
+	}
+}
+
 func TestWorkstationRunListsSkippedProbeChecks(t *testing.T) {
-	withFakes(t, nil)
-	out, _ := execute("run", "workstation", "-f", writeSettings(t, settingsYAML))
-	if !strings.Contains(out, "SKIPPED NET-02") || !strings.Contains(out, "workstation mode") {
+	withFakes(t, fakeRegistry(nil))
+	out, _ := execute("run", "workstation", "-f", writeSettings(t, settingsYAML), "-o", t.TempDir())
+	if !regexp.MustCompile(`workstation mode: CC-03, CC-04, CC-05, NET-01, NET-02, NET-03, NET-06, NET-07, REG-03, BAK-02, K8S-10, K8S-11|workstation mode: K8S-10`).MatchString(out) {
 		t.Fatalf("got:\n%s", out)
 	}
 }
 
 func TestUncoveredArmorVersionIsRefused(t *testing.T) {
-	withFakes(t, nil)
+	withFakes(t, fakeRegistry(nil))
+	dir := t.TempDir()
 	p := writeSettings(t, strings.Replace(settingsYAML, "1.0.404", "1.0.999", 1))
-	_, err := execute("run", "workstation", "-f", p)
+	_, err := execute("run", "workstation", "-f", p, "-o", dir)
 	if exitcode.FromError(err) != exitcode.ToolError || !strings.Contains(err.Error(), "Armor 1.0.999 is not covered") {
 		t.Fatalf("got %v", err)
+	}
+	if entries, _ := os.ReadDir(dir); len(entries) != 0 {
+		t.Fatal("a refused run must not write outputs")
 	}
 }
 
 func TestInvalidSettingsIsToolError(t *testing.T) {
-	withFakes(t, nil)
+	withFakes(t, fakeRegistry(nil))
 	for name, body := range map[string]string{
 		"inline secret": settingsYAML + "  password: hunter2\n",
 		"missing file":  "",
@@ -120,7 +162,7 @@ func TestInvalidSettingsIsToolError(t *testing.T) {
 			if body != "" {
 				p = writeSettings(t, body)
 			}
-			if _, err := execute("run", "cluster", "-f", p); exitcode.FromError(err) != exitcode.ToolError {
+			if _, err := execute("run", "cluster", "-f", p, "-o", t.TempDir()); exitcode.FromError(err) != exitcode.ToolError {
 				t.Fatalf("got %v", err)
 			}
 		})
@@ -129,14 +171,15 @@ func TestInvalidSettingsIsToolError(t *testing.T) {
 
 func TestUnimplementedChecksMakeRunExit3(t *testing.T) {
 	// The real registry: checks land in M3 to M6.
-	out, err := execute("run", "workstation")
-	if exitcode.FromError(err) != exitcode.ToolError || !strings.Contains(err.Error(), "does not implement") {
+	dir := t.TempDir()
+	out, err := execute("run", "workstation", "-o", dir)
+	if exitcode.FromError(err) != exitcode.ToolError || !strings.Contains(err.Error(), "does not implement 35 of 35 checks") {
 		t.Fatalf("got %v", err)
 	}
-	if !strings.Contains(err.Error(), "does not implement 35 of 35 checks") {
-		t.Fatalf("got %v", err)
-	}
-	if !strings.Contains(out, "Result: INCOMPLETE") {
+	if !regexp.MustCompile(`(?m)^  INCOMPLETE   `).MatchString(out) {
 		t.Fatalf("an incomplete run must not print a verdict:\n%s", out)
+	}
+	if rec, err := output.ReadRecord(dir); err != nil || rec.Verdict != output.VerdictIncomplete {
+		t.Fatalf("record %v %v", rec, err)
 	}
 }

@@ -14,3 +14,15 @@ var WorkstationPermissions = []string{
 	"list: clusterissuers.cert-manager.io",
 	"create: selfsubjectaccessreviews.authorization.k8s.io (not persisted)",
 }
+
+// ClusterPermissions are the additional permissions cluster mode uses. Every
+// write is confined to Preflight's own temporary namespace by the shipped
+// ValidatingAdmissionPolicy (D-2).
+var ClusterPermissions = []string{
+	"create, delete: namespaces (armor-preflight-<run id> only)",
+	"create, get, list, delete: pods, configmaps, secrets, persistentvolumeclaims, services (in armor-preflight-<run id> only)",
+	"get: pods/log (in armor-preflight-<run id> only)",
+	"list: events (in armor-preflight-<run id> only)",
+	"get, list: storageclasses.storage.k8s.io",
+	"list, delete: persistentvolumes (only volumes claimed from armor-preflight-<run id>)",
+}

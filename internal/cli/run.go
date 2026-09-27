@@ -7,11 +7,13 @@ import (
 	"net"
 	"os"
 	"os/signal"
+	"sort"
 	"strings"
 	"syscall"
 	"time"
 
 	"github.com/spf13/cobra"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"github.com/shariff25/agent-goverance-OS/armor-preflight/internal/buildinfo"
 	"github.com/shariff25/agent-goverance-OS/armor-preflight/internal/catalog"
@@ -21,6 +23,8 @@ import (
 	"github.com/shariff25/agent-goverance-OS/armor-preflight/internal/kube"
 	"github.com/shariff25/agent-goverance-OS/armor-preflight/internal/model"
 	"github.com/shariff25/agent-goverance-OS/armor-preflight/internal/output"
+	"github.com/shariff25/agent-goverance-OS/armor-preflight/internal/probe/orchestrator"
+	"github.com/shariff25/agent-goverance-OS/armor-preflight/internal/probe/protocol"
 	"github.com/shariff25/agent-goverance-OS/armor-preflight/internal/redact"
 	"github.com/shariff25/agent-goverance-OS/armor-preflight/internal/settings"
 	"github.com/shariff25/agent-goverance-OS/armor-preflight/internal/tlsutil"
@@ -28,11 +32,15 @@ import (
 
 // Hooks tests replace.
 var (
-	registry                     = checks.Registry
-	lookupEnv settings.EnvLookup = os.LookupEnv
-	now                          = time.Now
-	loadKube                     = kube.Load
+	registry                           = checks.Registry
+	lookupEnv       settings.EnvLookup = os.LookupEnv
+	now                                = time.Now
+	loadKube                           = kube.Load
+	newOrchestrator                    = orchestrator.New
 )
+
+// DefaultProbeTimeout bounds how long cluster mode waits for probe pods.
+const DefaultProbeTimeout = 3 * time.Minute
 
 type runOptions struct {
 	*globalOptions
@@ -40,6 +48,8 @@ type runOptions struct {
 	settingsFile string
 	outputDir    string
 	checkTimeout time.Duration
+	probeImage   string
+	probeTimeout time.Duration
 }
 
 func newRunCmd(g *globalOptions) *cobra.Command {
@@ -70,6 +80,10 @@ func newRunModeCmd(g *globalOptions, mode engine.Mode, short string) *cobra.Comm
 	f.StringVarP(&o.settingsFile, "settings", "f", "", "settings file (optional; settings-dependent checks are skipped without it)")
 	f.StringVarP(&o.outputDir, "output", "o", DefaultOutputDir, "output directory")
 	f.DurationVarP(&o.checkTimeout, "timeout", "t", DefaultCheckTimeout, "per-check timeout")
+	if mode == engine.ModeCluster {
+		f.StringVar(&o.probeImage, "probe-image", "", "probe image, preferably pinned by digest (default: the image this release was built with)")
+		f.DurationVar(&o.probeTimeout, "probe-timeout", DefaultProbeTimeout, "how long to wait for probe pods")
+	}
 	return cmd
 }
 
@@ -112,9 +126,13 @@ func (o *runOptions) run(ctx context.Context, stdout io.Writer) (err error) {
 		HTTP:         tlsutil.NewHTTPClient(tlsutil.Options{}),
 		Now:          now,
 	}
-	// Both modes use the read-only guard for now; cluster mode's probe
-	// orchestration (M4) widens it to the run namespace only.
-	env.Kube, env.KubeErr = loadKube(kube.Options{Kubeconfig: o.kubeconfig, Context: o.kubeContext, Mode: kube.ReadOnly})
+	// Workstation mode can only read. Cluster mode can also write, but only
+	// to its own temporary namespace.
+	kopts := kube.Options{Kubeconfig: o.kubeconfig, Context: o.kubeContext, Mode: kube.ReadOnly}
+	if o.mode == engine.ModeCluster {
+		kopts.Mode, kopts.Namespace = kube.RunNamespace, orchestrator.NamespaceName(runID)
+	}
+	env.Kube, env.KubeErr = loadKube(kopts)
 	target := output.Target{ArmorVersion: st.ArmorVersion, KubeContext: o.kubeContext}
 	if env.Kube != nil {
 		target.KubeContext = env.Kube.Context
@@ -122,6 +140,20 @@ func (o *runOptions) run(ctx context.Context, stdout io.Writer) (err error) {
 			target.KubernetesVersion = strings.TrimPrefix(v.GitVersion, "v")
 		}
 		env.Topology = checks.Topology(ctx, env)
+	}
+
+	var probes []output.Probe
+	if o.mode == engine.ModeCluster && env.Kube != nil {
+		orch := newOrchestrator(env.Kube.Core, runID, o.image(cat))
+		defer func() {
+			if cerr := o.cleanup(orch, out); cerr != nil && err == nil {
+				err = exitcode.ToolFailure(cerr)
+			}
+		}()
+		probes, err = o.startCluster(ctx, env, orch)
+		if err != nil {
+			return exitcode.ToolFailure(err)
+		}
 	}
 
 	rep, err := engine.Run(ctx, env, registry(), engine.Options{Timeout: o.checkTimeout})
@@ -136,6 +168,10 @@ func (o *runOptions) run(ctx context.Context, stdout io.Writer) (err error) {
 		rep.Results, rep.Unimplemented, rep.InternalErrors)
 	rec.Duration(now().Sub(started))
 	rec.RBAC = append(rec.RBAC, kube.WorkstationPermissions...)
+	if o.mode == engine.ModeCluster {
+		rec.RBAC = append(rec.RBAC, kube.ClusterPermissions...)
+		rec.Probes = append(rec.Probes, probes...)
+	}
 
 	files, werr := output.WriteFiles(o.outputDir, rec, output.FirewallInputs{Catalog: cat, Settings: st, Topology: env.Topology}, red)
 	if werr == nil {
@@ -168,4 +204,87 @@ func newRedactor(st *settings.Settings) *redact.Redactor {
 		red.Add(st.Registry.Username + ":" + sec.RegistryPassword)
 	}
 	return red
+}
+
+// image is the probe image to use: the flag, else the release default,
+// else the catalog value (unless TBD).
+func (o *runOptions) image(cat *catalog.Catalog) string {
+	switch {
+	case o.probeImage != "":
+		return o.probeImage
+	case buildinfo.ProbeImage != "":
+		return buildinfo.ProbeImage
+	case cat.Parameters.ProbeImage != catalog.TBD:
+		return cat.Parameters.ProbeImage
+	}
+	return ""
+}
+
+// startCluster creates the run namespace and runs the probe pods. Problems
+// that stop probes (no image, image not pullable, namespace refused) are
+// recorded on the environment so the affected checks report them; only an
+// interrupt is returned as an error.
+func (o *runOptions) startCluster(ctx context.Context, env *engine.Env, orch *orchestrator.Orchestrator) ([]output.Probe, error) {
+	if err := orch.CreateNamespace(ctx); err != nil {
+		env.RunNamespaceErr = err
+		env.ProbeUnavailable = "Preflight could not create its temporary namespace: " + err.Error()
+		return nil, nil
+	}
+	env.RunNamespace, env.ProbeImage = orch.Namespace, orch.Image
+	if orch.Image == "" {
+		env.ProbeUnavailable = "no probe image is configured; pass --probe-image"
+		return nil, nil
+	}
+	if o.probeTimeout <= 0 {
+		return nil, fmt.Errorf("--probe-timeout must be positive, got %s", o.probeTimeout)
+	}
+	nodes, err := env.Kube.Core.CoreV1().Nodes().List(ctx, metav1.ListOptions{})
+	if err != nil {
+		env.ProbeUnavailable = "could not list nodes to place probes: " + err.Error()
+		return nil, nil
+	}
+	p := env.Params()
+	pools := orchestrator.PoolsFromNodes(nodes.Items, p.NodePoolLabel, p.InstanceTypeLabel)
+	request := func(pool string) protocol.Request {
+		return protocol.Request{Version: protocol.Version, RunID: orch.RunID, NodePool: pool, Timeout: o.checkTimeout}
+	}
+	outcome, err := orch.RunProbes(ctx, pools, request, nil, o.probeTimeout)
+	if err != nil {
+		return nil, fmt.Errorf("run interrupted while probes were running: %w", err)
+	}
+	env.Probes = &engine.ProbeData{Results: outcome.Results, PoolErrors: outcome.PoolErrors}
+	env.ProbeUnavailable = outcome.Unavailable
+	var probes []output.Probe
+	for _, pr := range outcome.Probes {
+		probes = append(probes, output.Probe{NodePool: pr.NodePool, Node: pr.Node, Pod: pr.Pod, Image: pr.Image, ImageDigest: pr.ImageID, Error: outcome.PoolErrors[pr.NodePool]})
+	}
+	for pool, reason := range outcome.PoolErrors {
+		if !hasProbe(probes, pool) {
+			probes = append(probes, output.Probe{NodePool: pool, Image: orch.Image, Error: reason})
+		}
+	}
+	sort.Slice(probes, func(i, j int) bool { return probes[i].NodePool < probes[j].NodePool })
+	return probes, nil
+}
+
+func hasProbe(probes []output.Probe, pool string) bool {
+	for _, p := range probes {
+		if p.NodePool == pool {
+			return true
+		}
+	}
+	return false
+}
+
+// cleanup removes the run's namespace and objects. It runs on every exit,
+// including an interrupt, with its own deadline.
+func (o *runOptions) cleanup(orch *orchestrator.Orchestrator, out io.Writer) error {
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+	defer cancel()
+	if err := orch.Cleanup(ctx); err != nil {
+		fmt.Fprintf(out, "\nCleanup did not finish: %v\nRun `armor-preflight cleanup --run-id %s` to remove what is left.\n", err, orch.RunID)
+		return fmt.Errorf("cleanup did not finish: %w", err)
+	}
+	fmt.Fprintf(out, "\nRemoved Preflight's temporary namespace %s and everything in it.\n", orch.Namespace)
+	return nil
 }

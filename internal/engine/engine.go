@@ -14,6 +14,7 @@ import (
 	"github.com/shariff25/agent-goverance-OS/armor-preflight/internal/catalog"
 	"github.com/shariff25/agent-goverance-OS/armor-preflight/internal/kube"
 	"github.com/shariff25/agent-goverance-OS/armor-preflight/internal/model"
+	"github.com/shariff25/agent-goverance-OS/armor-preflight/internal/probe/protocol"
 	"github.com/shariff25/agent-goverance-OS/armor-preflight/internal/settings"
 )
 
@@ -79,6 +80,15 @@ type Env struct {
 	// example, the probe image could not be pulled).
 	ProbeUnavailable string
 
+	// RunNamespace is Preflight's temporary namespace in cluster mode, or ""
+	// when it could not be created (RunNamespaceErr says why).
+	RunNamespace    string
+	RunNamespaceErr error
+	// ProbeImage is the probe image reference in cluster mode.
+	ProbeImage string
+	// Probes holds probe results in cluster mode (nil otherwise).
+	Probes *ProbeData
+
 	// Kube is nil when the kubeconfig could not be loaded; KubeErr says why.
 	Kube    *kube.Clients
 	KubeErr error
@@ -112,6 +122,12 @@ func (e *Env) Artifacts() map[string][]byte {
 		out[k] = v
 	}
 	return out
+}
+
+// ProbeData is what the probe pods reported, by node pool.
+type ProbeData struct {
+	Results    map[string]protocol.Result
+	PoolErrors map[string]string
 }
 
 // Params returns the catalog parameters.
@@ -257,7 +273,7 @@ func (r *runner) runOne(ctx context.Context, def *catalog.Check) []model.Result 
 		if err == errTimeout {
 			res := r.template(def)
 			res.Status = model.StatusFail
-			res.Evidence = []model.Evidence{{Stage: "timeout", OK: false, Detail: fmt.Sprintf("check did not finish within %s", r.opts.Timeout)}}
+			res.Evidence = []model.Evidence{{Stage: "timeout", OK: false, Detail: fmt.Sprintf("check did not finish within %s", r.timeout(def))}}
 			return []model.Result{r.normalize(def, res)}
 		}
 		return r.skipAll(def, "Preflight internal error: "+r.noteInternal("%s: %v", def.ID, err))
@@ -325,9 +341,18 @@ func (r *runner) inputs(def *catalog.Check) string {
 
 var errTimeout = fmt.Errorf("timeout")
 
+// timeout is the check's own timeout from the catalog, if it is longer
+// than the run's per-check timeout.
+func (r *runner) timeout(def *catalog.Check) time.Duration {
+	if t := time.Duration(def.TimeoutSeconds) * time.Second; t > r.opts.Timeout {
+		return t
+	}
+	return r.opts.Timeout
+}
+
 // call runs fn with the per-check timeout, turning a panic into an error.
 func (r *runner) call(ctx context.Context, fn CheckFunc, def *catalog.Check) ([]model.Result, error) {
-	ctx, cancel := context.WithTimeout(ctx, r.opts.Timeout)
+	ctx, cancel := context.WithTimeout(ctx, r.timeout(def))
 	defer cancel()
 	type outcome struct {
 		res []model.Result

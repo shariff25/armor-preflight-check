@@ -69,6 +69,8 @@ type Probe struct {
 	Pod         string `json:"pod"`
 	Image       string `json:"image"`
 	ImageDigest string `json:"imageDigest"`
+	// Error is why this probe produced no result, if it did not.
+	Error string `json:"error,omitempty"`
 }
 
 // NewRecord assembles a record. Slices are never nil, so JSON always has

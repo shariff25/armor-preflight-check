@@ -7,6 +7,8 @@
 # lives here.
 #
 # Field reference:
+#   timeoutSeconds: overrides the per-check timeout (-t) for checks that wait
+#                   on the cluster
 #   runsIn:   workstation   - CLI only, read-only against the Kubernetes API
 #             cluster-write - CLI in cluster mode; creates test objects in the
 #                             run namespace (D-4)
@@ -56,6 +58,7 @@ parameters:
   clockSkewSeconds: 5
   pullSecretExpiryWarnDays: 14
   loadBalancerTimeoutSeconds: 90
+  volumeBindTimeoutSeconds: 90
   sgxResources:
     - sgx.intel.com/enclave
     - sgx.intel.com/provision
@@ -223,6 +226,7 @@ checks:
     runsIn: cluster-write
     scope: cluster
     dependsOn: [WS-01]
+    timeoutSeconds: 120
     docLink: *prereq
     remediation: Make a default storage class available that provisions volumes, preferably with reclaim policy Retain.
 
@@ -234,6 +238,7 @@ checks:
     runsIn: cluster-write
     scope: cluster
     dependsOn: [WS-01]
+    timeoutSeconds: 120
     docLink: *prereq
     remediation: Make sure LoadBalancer Services are assigned an address (check the cloud load balancer quota and subnet permissions).
 

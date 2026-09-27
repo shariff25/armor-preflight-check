@@ -20,6 +20,7 @@ import (
 	authv1 "k8s.io/api/authorization/v1"
 	corev1 "k8s.io/api/core/v1"
 	networkingv1 "k8s.io/api/networking/v1"
+	storagev1 "k8s.io/api/storage/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -69,6 +70,10 @@ type fixture struct {
 	params         func(*catalog.Parameters)
 	reg            *registrytest.Registry
 	dir            string
+	storageClasses []*storagev1.StorageClass
+	bindVolumes    bool   // the fake provisioner binds claims
+	lbAddress      string // the fake cloud assigns this address
+	runNamespace   string
 
 	core *fake.Clientset
 	dyn  *dynamicfake.FakeDynamicClient
@@ -162,6 +167,10 @@ func newFixture(t *testing.T) *fixture {
 	f.crds = []*unstructured.Unstructured{crd("certificates.cert-manager.io", "cert-manager.io"), crd("clusterissuers.cert-manager.io", "cert-manager.io")}
 	f.issuers = []*unstructured.Unstructured{issuer("corp-ca", true)}
 	f.tools = map[string]string{"kubectl": "Client Version: v1.34.1", "helm": "v3.16.2+g13654a5", "jq": "jq-1.7.1", "openssl": "OpenSSL 3.0.13 30 Jan 2024"}
+	retain := corev1.PersistentVolumeReclaimRetain
+	f.storageClasses = []*storagev1.StorageClass{{ObjectMeta: metav1.ObjectMeta{Name: "managed-csi-retain", Annotations: map[string]string{"storageclass.kubernetes.io/is-default-class": "true"}},
+		Provisioner: "disk.csi.azure.com", ReclaimPolicy: &retain}}
+	f.bindVolumes, f.lbAddress, f.runNamespace = true, "10.20.8.40", "armor-preflight-20260926-1512-7f3a"
 	f.dns = map[string][]string{"armor.example.com": {"10.20.8.10"}, "static.armor.example.com": {"10.20.8.11"}}
 	certPath := writeChain(t, dir, "api.armor.example.com", true)
 	f.settingsYAML = fmt.Sprintf(`armorVersion: "1.0.404"
@@ -233,6 +242,9 @@ func (f *fixture) env(mode engine.Mode) *engine.Env {
 	for _, s := range f.secrets {
 		objs = append(objs, s)
 	}
+	for _, sc := range f.storageClasses {
+		objs = append(objs, sc)
+	}
 	f.core = fake.NewSimpleClientset(objs...)
 	f.core.Discovery().(*fakediscovery.FakeDiscovery).FakedServerVersion = &version.Info{GitVersion: f.serverVersion}
 	f.core.PrependReactor("create", "selfsubjectaccessreviews", func(a k8stesting.Action) (bool, runtime.Object, error) {
@@ -240,6 +252,21 @@ func (f *fixture) env(mode engine.Mode) *engine.Env {
 		attr := r.Spec.ResourceAttributes
 		r.Status.Allowed = !f.deny[attr.Resource+"/"+attr.Subresource]
 		return true, r, nil
+	})
+
+	f.core.PrependReactor("create", "persistentvolumeclaims", func(a k8stesting.Action) (bool, runtime.Object, error) {
+		if f.bindVolumes {
+			pvc := a.(k8stesting.CreateAction).GetObject().(*corev1.PersistentVolumeClaim)
+			pvc.Status.Phase, pvc.Spec.VolumeName = corev1.ClaimBound, "pvc-0001"
+		}
+		return false, nil, nil
+	})
+	f.core.PrependReactor("create", "services", func(a k8stesting.Action) (bool, runtime.Object, error) {
+		if f.lbAddress != "" {
+			svc := a.(k8stesting.CreateAction).GetObject().(*corev1.Service)
+			svc.Status.LoadBalancer.Ingress = []corev1.LoadBalancerIngress{{IP: f.lbAddress}}
+		}
+		return false, nil, nil
 	})
 
 	scheme := runtime.NewScheme()
@@ -267,12 +294,14 @@ func (f *fixture) env(mode engine.Mode) *engine.Env {
 	vars := f.envVars
 	return &engine.Env{
 		Mode: mode, Catalog: cat, Settings: st, SettingsFile: "settings.yaml",
-		LookupEnv: func(k string) (string, bool) { v, ok := vars[k]; return v, ok },
-		Kube:      &kube.Clients{Core: f.core, Dynamic: f.dyn, Context: "aks-armor-prod", Server: "https://aks-armor-prod.hcp.eastus.azmk8s.io:443"},
-		Local:     fakeTools(f.tools),
-		DNS:       fakeDNS(f.dns),
-		HTTP:      f.reg.Client(),
-		Now:       func() time.Time { return time.Date(2026, 9, 26, 15, 12, 4, 0, time.UTC) },
+		LookupEnv:    func(k string) (string, bool) { v, ok := vars[k]; return v, ok },
+		Kube:         &kube.Clients{Core: f.core, Dynamic: f.dyn, Context: "aks-armor-prod", Server: "https://aks-armor-prod.hcp.eastus.azmk8s.io:443"},
+		Local:        fakeTools(f.tools),
+		DNS:          fakeDNS(f.dns),
+		HTTP:         f.reg.Client(),
+		RunNamespace: f.runNamespace,
+		ProbeImage:   "example.invalid/armor-preflight-probe@sha256:abc",
+		Now:          func() time.Time { return time.Date(2026, 9, 26, 15, 12, 4, 0, time.UTC) },
 	}
 }
 

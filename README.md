@@ -2,7 +2,7 @@
 
 `armor-preflight` checks whether a customer environment is ready for a Fortanix Armor on-prem install, before anyone starts the install. It checks every prerequisite from where Armor will actually run and tells each customer team what it needs to fix.
 
-> **Status: milestone M3.** The catalog, engine, outputs and support bundle are in place, and the 23 checks that run from the workstation are implemented. The 12 cluster-mode and probe checks (K8S-10, K8S-11, CC-03 to CC-05, NET-01 to NET-03, NET-06, NET-07, REG-03, BAK-02) arrive in M4 to M6. Until then, `run` lists them as not implemented, writes its outputs with verdict `INCOMPLETE` and exits 3. `cleanup` exits 3 ("not implemented yet"). See [PLAN.md](PLAN.md) for the build order.
+> **Status: milestone M4.** The catalog, engine, outputs, support bundle, workstation checks, cluster mode (temporary namespace, probe pods, K8S-10, K8S-11) and `cleanup` are all in place. The 10 probe-based checks (CC-03 to CC-05, NET-01 to NET-03, NET-06, NET-07, REG-03, BAK-02) arrive in M5 and M6. Until then, `run` lists them as not implemented, writes its outputs with verdict `INCOMPLETE` and exits 3. See [PLAN.md](PLAN.md) for the build order.
 
 ## Commands
 
@@ -13,6 +13,8 @@
 | `armor-preflight bundle` | Packages the latest run into a redacted archive for a support ticket. `--list` shows the contents without writing it. |
 | `armor-preflight cleanup` | Deletes leftover Preflight objects, found by label. `--run-id` limits it to one run. |
 | `armor-preflight version` | Prints the Preflight version, catalog version and supported Armor versions. |
+
+`run cluster` also takes `--probe-image` (the probe image, preferably pinned by digest) and `--probe-timeout` (default 3 minutes).
 
 | Flag | Meaning | Default |
 |---|---|---|
@@ -62,6 +64,18 @@ Secrets the settings file names are masked in everything Preflight prints or wri
 | 2 | NOT READY (at least one blocker failed) |
 | 3 | Preflight itself failed to run |
 
+## Cluster mode
+
+`run cluster` runs everything workstation mode does, plus the checks that need to act inside the cluster. It creates a temporary namespace, `armor-preflight-<run id>`, which enforces the restricted Pod Security Standards. In that namespace it:
+
+- starts one probe pod per node pool, pinned by node selector and tolerating the pool's taints;
+- creates a 1 GiB test volume (K8S-10);
+- creates an internal LoadBalancer Service with no selector (K8S-11).
+
+Everything Preflight creates is labelled `app.kubernetes.io/managed-by=armor-preflight` and `armor-preflight/run-id=<run id>`. The namespace is deleted when the run ends, including after Ctrl-C. If the process is killed, `armor-preflight cleanup` removes whatever is left.
+
+The probe image ([`deploy/probe/Dockerfile`](deploy/probe/Dockerfile), `make probe-image`) is a static binary of about 1.8 MB on distroless. It runs as a non-root user with a read-only root filesystem and every capability dropped. It needs no Kubernetes API access. If the nodes can't pull it, Preflight names the image to mirror and still finishes every workstation check.
+
 ## Permissions
 
 `run workstation` only reads from the cluster. [`deploy/rbac/workstation.yaml`](deploy/rbac/workstation.yaml) is the least-privilege role it needs:
@@ -71,7 +85,17 @@ Secrets the settings file names are masked in everything Preflight prints or wri
 
 K8S-09 checks the permissions of whoever runs Preflight. Run it with the installer's credentials to check the installer.
 
-`scripts/audit-lab.sh` proves this. It starts a real kube-apiserver with audit logging, seeds an AKS-like cluster, and runs Preflight as an identity bound only to that role. It then fails if the audit log shows any write, or any forbidden request. CI runs it on every change.
+`run cluster` and `cleanup` also need [`deploy/rbac/cluster.yaml`](deploy/rbac/cluster.yaml). It adds the write permissions for Preflight's own objects, plus a ValidatingAdmissionPolicy (Kubernetes 1.30 or later) that confines those writes to `armor-preflight-*` namespaces and the volumes claimed from them. Edit the policy's `matchConditions` to name the identity that runs Preflight.
+
+`scripts/audit-lab.sh` proves this. It starts a real kube-apiserver with audit logging, seeds an AKS-like cluster, and runs Preflight as an identity bound only to that role. It then fails if the audit log shows any write, or any forbidden request.
+
+In cluster mode, the lab also checks that:
+- every write stays inside the run namespace;
+- probe pods pass the API server's restricted admission;
+- the admission policy denies writes anywhere else;
+- nothing is left after a normal exit, after an interrupt, or after a killed run followed by `cleanup`.
+
+CI runs the lab on every change.
 
 ## Building
 

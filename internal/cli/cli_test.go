@@ -58,15 +58,6 @@ func TestDefaults(t *testing.T) {
 	}
 }
 
-func TestUnimplementedCommandsExitToolError(t *testing.T) {
-	for _, args := range [][]string{{"bundle"}, {"cleanup"}} {
-		_, err := execute(args...)
-		if code := exitcode.FromError(err); code != exitcode.ToolError {
-			t.Errorf("%v: exit %d, want %d", args, code, exitcode.ToolError)
-		}
-	}
-}
-
 func TestBadTimeoutIsToolError(t *testing.T) {
 	_, err := execute("run", "workstation", "-t", "0s")
 	if exitcode.FromError(err) != exitcode.ToolError || !strings.Contains(err.Error(), "timeout") {

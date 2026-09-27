@@ -18,6 +18,8 @@ func Registry() engine.Registry {
 		"K8S-07": k8s07,
 		"K8S-08": k8s08,
 		"K8S-09": k8s09,
+		"K8S-10": k8s10,
+		"K8S-11": k8s11,
 		"K8S-12": k8s12,
 		"CC-01":  cc01,
 		"CC-02":  cc02,

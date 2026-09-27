@@ -9,4 +9,8 @@ var (
 	Commit = "unknown"
 	// Date is the build timestamp in RFC 3339.
 	Date = "unknown"
+	// ProbeImage is the default probe image, pinned by digest at release
+	// time (for example registry/armor-preflight-probe@sha256:...). Empty
+	// in development builds; pass --probe-image instead.
+	ProbeImage = ""
 )

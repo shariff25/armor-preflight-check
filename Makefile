@@ -7,7 +7,7 @@ LDFLAGS  := -s -w -X $(PKG)/internal/buildinfo.Version=$(VERSION) \
             -X $(PKG)/internal/buildinfo.Date=$(DATE)
 PLATFORMS := linux/amd64 linux/arm64 darwin/amd64 darwin/arm64
 
-.PHONY: build test lint cross clean
+.PHONY: build test lint cross clean probe-image audit-lab
 
 build:
 	CGO_ENABLED=0 go build -trimpath -ldflags '$(LDFLAGS)' -o bin/armor-preflight ./cmd/armor-preflight
@@ -28,6 +28,14 @@ cross:
 	  CGO_ENABLED=0 GOOS=$$os GOARCH=$$arch go build -trimpath -ldflags '$(LDFLAGS)' \
 	    -o bin/armor-preflight-$$os-$$arch ./cmd/armor-preflight || exit 1; \
 	done
+
+# The probe image used by `run cluster` (distroless, non-root).
+probe-image:
+	docker build -f deploy/probe/Dockerfile -t armor-preflight-probe:dev .
+
+# R1.4 checks against a real kube-apiserver with audit logging (see the script).
+audit-lab:
+	scripts/audit-lab.sh
 
 clean:
 	rm -rf bin dist preflight-out

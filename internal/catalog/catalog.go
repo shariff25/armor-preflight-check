@@ -93,6 +93,7 @@ type Parameters struct {
 	ClockSkewSeconds           int      `json:"clockSkewSeconds"`
 	PullSecretExpiryWarnDays   int      `json:"pullSecretExpiryWarnDays"`
 	LoadBalancerTimeoutSeconds int      `json:"loadBalancerTimeoutSeconds"`
+	VolumeBindTimeoutSeconds   int      `json:"volumeBindTimeoutSeconds"`
 	SGXResources               []string `json:"sgxResources"`
 	NFDSGXLabel                string   `json:"nfdSgxLabel"`
 	NodePoolLabel              string   `json:"nodePoolLabel"`
@@ -129,6 +130,9 @@ type Check struct {
 	DependsOn             []string       `json:"dependsOn,omitempty"`
 	DocLink               string         `json:"docLink"`
 	Remediation           string         `json:"remediation"`
+	// TimeoutSeconds overrides the per-check timeout for checks that wait
+	// on the cluster (a volume binding, a load balancer address).
+	TimeoutSeconds int `json:"timeoutSeconds,omitempty"`
 }
 
 // SeverityFor resolves the check's severity for a storage environment.

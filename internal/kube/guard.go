@@ -15,9 +15,18 @@ const (
 	// SelfSubjectRulesReview, which the API server does not persist (D-1).
 	ReadOnly GuardMode = iota
 	// RunNamespace additionally allows writes to the run's own namespace
-	// object and to objects inside it.
+	// object and to objects inside it, and deleting persistent volumes
+	// (the orchestrator only deletes volumes claimed from its namespace;
+	// the shipped admission policy enforces that, D-2).
 	RunNamespace
+	// Cleanup allows only deleting Preflight namespaces (armor-preflight-*)
+	// and persistent volumes, for `armor-preflight cleanup`.
+	Cleanup
 )
+
+// namespacePrefix mirrors orchestrator.NamespacePrefix (kept here to avoid
+// an import cycle).
+const namespacePrefix = "armor-preflight-"
 
 // nonPersisted are the only resources ReadOnly lets a POST reach.
 var nonPersisted = map[string]bool{
@@ -71,8 +80,16 @@ func (g *Guard) allowed(method, path string) bool {
 	if method == http.MethodPost && nonPersisted[path] {
 		return true
 	}
+	isPVDelete := method == http.MethodDelete && strings.HasPrefix(path, "/api/v1/persistentvolumes/")
+	if g.Mode == Cleanup {
+		name := strings.TrimPrefix(path, "/api/v1/namespaces/")
+		return isPVDelete || (method == http.MethodDelete && name != path && strings.HasPrefix(name, namespacePrefix) && !strings.Contains(name, "/"))
+	}
 	if g.Mode != RunNamespace || g.Namespace == "" {
 		return false
+	}
+	if isPVDelete {
+		return true
 	}
 	ns := "/api/v1/namespaces/" + g.Namespace
 	switch {

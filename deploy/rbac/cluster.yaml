@@ -1,0 +1,85 @@
+# Additional permissions for `armor-preflight run cluster` and
+# `armor-preflight cleanup`. Apply together with workstation.yaml.
+#
+# Kubernetes RBAC cannot limit writes to a namespace whose name is only known
+# at run time (armor-preflight-<run id>), so the ClusterRole grants the write
+# verbs and the ValidatingAdmissionPolicy below confines them (D-2):
+#
+#   - namespaces: only armor-preflight-* carrying
+#     app.kubernetes.io/managed-by=armor-preflight
+#   - pods, configmaps, secrets, persistentvolumeclaims, services: only
+#     inside an armor-preflight-* namespace
+#   - persistentvolumes: delete only, and only a volume claimed from an
+#     armor-preflight-* namespace (K8S-10's test volume, if retained)
+#
+# The policy applies to the identities named in its matchConditions. By
+# default that is members of the group "armor-preflight" and the service
+# account armor-preflight/armor-preflight; edit the expression to name the
+# identity that runs Preflight. scripts/audit-lab.sh applies this file to a
+# real API server and checks that writes outside those namespaces are denied.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: armor-preflight-cluster
+  labels: {app.kubernetes.io/name: armor-preflight}
+rules:
+  - apiGroups: [""]
+    resources: [namespaces]
+    verbs: [create, delete]
+  - apiGroups: [""]
+    resources: [pods, configmaps, secrets, persistentvolumeclaims, services]
+    verbs: [create, get, list, delete]
+  - apiGroups: [""]
+    resources: [pods/log]
+    verbs: [get]
+  - apiGroups: [""]
+    resources: [events]
+    verbs: [list]
+  - apiGroups: [storage.k8s.io]
+    resources: [storageclasses]
+    verbs: [get, list]
+  - apiGroups: [""]
+    resources: [persistentvolumes]
+    verbs: [list, delete]
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicy
+metadata:
+  name: armor-preflight-confine-writes
+  labels: {app.kubernetes.io/name: armor-preflight}
+spec:
+  failurePolicy: Fail
+  matchConstraints:
+    resourceRules:
+      - apiGroups: [""]
+        apiVersions: ["*"]
+        operations: [CREATE, UPDATE, DELETE, CONNECT]
+        resources: [namespaces, pods, configmaps, secrets, persistentvolumeclaims, services, persistentvolumes]
+  matchConditions:
+    - name: is-armor-preflight
+      expression: >-
+        request.userInfo.groups.exists(g, g == 'armor-preflight') ||
+        request.userInfo.username == 'system:serviceaccount:armor-preflight:armor-preflight'
+  variables:
+    - name: target
+      expression: "request.operation == 'DELETE' ? oldObject : object"
+  validations:
+    - expression: >-
+        request.resource.resource == 'namespaces' ?
+          (variables.target.metadata.name.startsWith('armor-preflight-') &&
+           variables.target.metadata.?labels['app.kubernetes.io/managed-by'].orValue('') == 'armor-preflight')
+        : request.resource.resource == 'persistentvolumes' ?
+          (request.operation == 'DELETE' && has(variables.target.spec.claimRef) &&
+           variables.target.spec.claimRef.namespace.startsWith('armor-preflight-'))
+        : request.namespace.startsWith('armor-preflight-')
+      message: armor-preflight may only change its own armor-preflight-* namespaces and the volumes claimed from them
+      reason: Forbidden
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicyBinding
+metadata:
+  name: armor-preflight-confine-writes
+  labels: {app.kubernetes.io/name: armor-preflight}
+spec:
+  policyName: armor-preflight-confine-writes
+  validationActions: [Deny]

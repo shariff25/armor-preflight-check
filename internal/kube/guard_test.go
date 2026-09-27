@@ -103,6 +103,7 @@ func TestRunNamespaceMode(t *testing.T) {
 		"POST /api/v1/namespaces/armor-preflight-20260926-1512-7f3a/persistentvolumeclaims",
 		"DELETE /api/v1/namespaces/armor-preflight-20260926-1512-7f3a/services/lb",
 		"GET /api/v1/nodes",
+		"DELETE /api/v1/persistentvolumes/pvc-123",
 	}
 	refused := []string{
 		"POST /api/v1/namespaces/default/pods",
@@ -110,7 +111,7 @@ func TestRunNamespaceMode(t *testing.T) {
 		"DELETE /api/v1/namespaces/kube-system",
 		"POST /apis/rbac.authorization.k8s.io/v1/clusterroles",
 		"PATCH /api/v1/nodes/n1",
-		"DELETE /api/v1/persistentvolumes/pv1",
+		"POST /api/v1/persistentvolumes",
 		"POST /apis/apps/v1/namespaces/default/deployments",
 	}
 	for _, s := range allowed {
@@ -123,6 +124,25 @@ func TestRunNamespaceMode(t *testing.T) {
 		m, p, _ := strings.Cut(s, " ")
 		if g.allowed(m, p) {
 			t.Errorf("should refuse %s", s)
+		}
+	}
+}
+
+func TestCleanupMode(t *testing.T) {
+	g := &Guard{Mode: Cleanup}
+	for s, want := range map[string]bool{
+		"DELETE /api/v1/namespaces/armor-preflight-20260926-1512-7f3a":    true,
+		"DELETE /api/v1/persistentvolumes/pvc-1":                          true,
+		"GET /api/v1/namespaces":                                          true,
+		"DELETE /api/v1/namespaces/kube-system":                           false,
+		"DELETE /api/v1/namespaces/armor-preflight-x/pods/p":              false,
+		"POST /api/v1/namespaces":                                         false,
+		"PATCH /api/v1/namespaces/armor-preflight-20260926-1512-7f3a":     false,
+		"POST /api/v1/namespaces/armor-preflight-20260926-1512-7f3a/pods": false,
+	} {
+		m, p, _ := strings.Cut(s, " ")
+		if got := g.allowed(m, p); got != want {
+			t.Errorf("%s: allowed=%v, want %v", s, got, want)
 		}
 	}
 }

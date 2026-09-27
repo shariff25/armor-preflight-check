@@ -112,3 +112,43 @@ The user chose not to gate the build on D-1 to D-3, so the plan's defaults apply
 - **PKI-02 (certificate chain).** With `certificates.sampleApiCertPath` set, the PEM file must contain the leaf, at least one intermediate and a self-signed root CA, each signed by the next. The leaf must be currently valid and usable for TLS server authentication.
 - **PKI-03 (API SANs).** Reads the planned SANs from `certificates.plannedApiSans`, or else from the sample certificate. With neither, it's skipped with that reason, rather than failed.
 - **TLS in one place (D-20).** `internal/tlsutil` builds every outbound TLS configuration (TLS 1.2 minimum). Redirects to plain HTTP aren't followed.
+
+## M4
+
+- **How cluster mode runs.**
+  1. The CLI creates `armor-preflight-<run id>`, labelled `app.kubernetes.io/managed-by=armor-preflight` and `armor-preflight/run-id`, and set to enforce the Pod Security Standards `restricted` profile. The API server itself therefore rejects any probe pod that would break the profile.
+  2. It runs one probe pod per node pool, then runs the checks.
+  3. It deletes the namespace on every exit path: normal exit, error or interrupt. A deferred cleanup with its own 2-minute deadline handles this.
+  4. A killed process leaves objects behind, and `armor-preflight cleanup` removes them.
+- **Probe pods are bare Pods, not Jobs,** so Preflight needs no batch RBAC. Each pod is pinned with a nodeSelector on the pool label, falling back to the instance type and then the hostname. It tolerates every taint its pool's nodes carry, has `activeDeadlineSeconds: 300`, and doesn't restart.
+  - Each pod runs as 65532 with a read-only root filesystem, all capabilities dropped, no privilege escalation and RuntimeDefault seccomp.
+  - It has no service-account token, no host namespaces and no service links.
+  - A unit test runs the pod spec through the official `k8s.io/pod-security-admission` restricted checks.
+  - The probe request goes in through a ConfigMap. Credentials go through a Secret (D-3), which is only created from M5 on, once probe checks need it.
+- **Per-SGX-node probe pods** (requesting `sgx.intel.com/*`) are deferred to M6, together with the SGX probe image (D-5). M4 runs one probe per pool.
+- **Probe protocol.** The probe prints one line, `ARMOR-PREFLIGHT-RESULT <json>`, carrying a protocol version. The CLI reads the last such line from the pod log. It rejects a result from another run ID, and rejects a different protocol version with "use the probe image built with this release".
+- **Probe failures.** An image pull failure (ErrImagePull, ImagePullBackOff, InvalidImageName) is recorded per pool. If no pool could pull the image, every probe check is skipped, naming the image to mirror. Workstation checks still complete (R1.5).
+  - An unschedulable pool is recorded with the scheduler's message. So is a pool whose probe doesn't finish within `--probe-timeout` (default 3 minutes).
+- **Choosing the probe image.** `--probe-image` wins. Otherwise Preflight uses the release default stamped in with `-ldflags` (`buildinfo.ProbeImage`, pinned by digest at release), and then the catalog value, which is TBD. Without an image, probe checks are skipped ("no probe image is configured"), while K8S-10 and K8S-11 still run.
+- **Test objects are named by role:** `storage-test`, `storage-test-consumer`, `loadbalancer-test`, `probe-<pool>` and `request-<pool>`. Pool names are sanitised to DNS-1123, with a short hash added when sanitising changed the name, so two pools never collide.
+- **K8S-10 (storage).** Uses the default StorageClass, or `storageClass` from the settings file. It creates a 1 GiB ReadWriteOnce claim and waits up to `volumeBindTimeoutSeconds` (90s) for it to bind.
+  - With WaitForFirstConsumer binding, it creates a restricted pod that mounts the claim, using the probe image.
+  - A reclaim policy of Delete gives a warning. The check fails with the newest Warning event when the claim never binds.
+  - Retained volumes claimed from the run namespace are deleted at cleanup.
+- **K8S-11 (load balancer).** The test Service has no selector, so it never routes traffic, and carries `service.beta.kubernetes.io/azure-load-balancer-internal: "true"` so no public IP is allocated. A consequence: if Armor needs a public load balancer, this test won't catch a missing public-IP quota.
+- **Per-check timeouts.** A catalog `timeoutSeconds` value overrides `-t` for checks that wait on the cluster; K8S-10 and K8S-11 use 120 seconds.
+- **RBAC for cluster mode (D-2).** `deploy/rbac/cluster.yaml` has two parts:
+  - A ClusterRole granting create and delete on namespaces, pods, configmaps, secrets, persistentvolumeclaims and services; get on pods/log; list on events and storage classes; list and delete on persistentvolumes.
+  - A ValidatingAdmissionPolicy that denies the Preflight identity any of those writes unless the target is an `armor-preflight-*` namespace carrying the managed-by label, an object inside one, or a volume claimed from one.
+  - The policy matches members of the group `armor-preflight`, or the service account `armor-preflight/armor-preflight`. Customers edit that expression to name their own identity.
+  - A Go test fails if any shipped role grants a write verb outside that list, or uses a wildcard.
+- **The write guard in cluster and cleanup modes.**
+  - Cluster mode allows writes to the run namespace, to objects inside it, to namespace creation, and to persistentvolume deletes.
+  - `cleanup` only allows deleting `armor-preflight-*` namespaces and persistent volumes. It deletes a namespace only if it has both the managed-by label and the name prefix. It deletes a volume only if its claim was in such a namespace.
+- **Proof in the audit lab.** `scripts/audit-lab.sh` now also runs cluster mode against the real API server, with a simulator standing in for the volume binder, cloud load balancer and namespace controller. It checks all of the following:
+  - Every write stays in the run namespace.
+  - Probe pods are admitted under restricted enforcement.
+  - The admission policy denies writes elsewhere, including ones RBAC alone would allow.
+  - Nothing is left after a normal exit, after SIGINT, or after SIGKILL followed by `cleanup`.
+  - Probe pods are never scheduled in envtest, so probe results are covered by unit tests. A real cluster run is a manual test.
+- **Probe image.** The Dockerfile is `deploy/probe/Dockerfile`: a static Go build on `gcr.io/distroless/static:nonroot`, user 65532. The runtime image is about 1.8 MB. CI builds it and runs it with a read-only filesystem, all capabilities dropped, no-new-privileges and no network. Signing and the image tarball come with M7.

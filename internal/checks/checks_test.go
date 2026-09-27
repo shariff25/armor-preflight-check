@@ -12,6 +12,8 @@ import (
 	"time"
 
 	corev1 "k8s.io/api/core/v1"
+	storagev1 "k8s.io/api/storage/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	k8stesting "k8s.io/client-go/testing"
 
 	"github.com/shariff25/agent-goverance-OS/armor-preflight/internal/catalog"
@@ -58,10 +60,10 @@ func evidenceText(rs []model.Result) string {
 // workstation check.
 func TestCompliantClusterPasses(t *testing.T) {
 	f := newFixture(t)
-	rep := runChecks(t, f.env(engine.ModeWorkstation))
+	rep := runChecks(t, clusterEnv(f))
 	impl := Registry()
 	for _, r := range rep.Results {
-		if impl[r.ID] == nil {
+		if impl[r.ID] == nil || r.SkippedReason != nil && *r.SkippedReason == "not implemented in this build" {
 			continue
 		}
 		switch {
@@ -107,6 +109,8 @@ func TestEachCheckFailsOnItsFixture(t *testing.T) {
 		}, "chart version 1.0.405 not found"},
 		"REG-04": {func(f *fixture) { mirrorMode(f, false) }, "armor/operator@" + imageDigest + " not found in the mirror"},
 		"REG-05": {func(f *fixture) { f.secrets = nil }, "no image pull secret for"},
+		"K8S-10": {func(f *fixture) { f.storageClasses = nil }, "no default storage class"},
+		"K8S-11": {func(f *fixture) { f.lbAddress = "" }, "received no address within 1s"},
 		"BAK-01": {func(f *fixture) {
 			f.settingsYAML = strings.Replace(f.settingsYAML, "accountKind: StorageV2", "accountKind: BlobStorage", 1)
 		}, "account kind BlobStorage (StorageV2 required)"},
@@ -130,7 +134,7 @@ func TestEachCheckFailsOnItsFixture(t *testing.T) {
 		t.Run(id, func(t *testing.T) {
 			f := newFixture(t)
 			c.mutate(f)
-			rep := runChecks(t, f.env(engine.ModeWorkstation))
+			rep := runChecks(t, clusterEnv(f))
 			rs := resultsFor(rep, id)
 			want := model.StatusFail
 			if cat.Check(id).Severity == model.SeverityWarning {
@@ -370,5 +374,92 @@ func TestTBDValuesSkip(t *testing.T) {
 	r := resultsFor(rep, "K8S-08")[0]
 	if r.Status != model.StatusWarn || !strings.Contains(evidenceText([]model.Result{r}), "unverified") {
 		t.Errorf("K8S-08 should warn while certManagerVersions is TBD: %s", r.Status)
+	}
+}
+
+// clusterEnv is the fixture in cluster mode with short waits. Probe checks
+// have no probe data yet, so they report skipped.
+func clusterEnv(f *fixture) *engine.Env {
+	pollInterval = 10 * time.Millisecond
+	env := f.env(engine.ModeCluster)
+	env.Catalog.Parameters.VolumeBindTimeoutSeconds = 1
+	env.Catalog.Parameters.LoadBalancerTimeoutSeconds = 1
+	env.ProbeUnavailable = "no probes in this test"
+	return env
+}
+
+func TestK8S10(t *testing.T) {
+	delete := corev1.PersistentVolumeReclaimDelete
+	wffc := storagev1.VolumeBindingWaitForFirstConsumer
+	cases := map[string]struct {
+		mutate func(f *fixture, env *engine.Env)
+		status model.Status
+		want   string
+	}{
+		"retain binds":        {func(*fixture, *engine.Env) {}, model.StatusPass, "a 1Gi volume was provisioned and bound (pvc-0001)"},
+		"delete warns":        {func(f *fixture, _ *engine.Env) { f.storageClasses[0].ReclaimPolicy = &delete }, model.StatusWarn, "reclaim policy is Delete"},
+		"never binds":         {func(f *fixture, _ *engine.Env) { f.bindVolumes = false }, model.StatusFail, "was not bound within 1s"},
+		"wffc without image":  {func(f *fixture, env *engine.Env) { f.storageClasses[0].VolumeBindingMode = &wffc }, model.StatusFail, "binds on first use"},
+		"named class missing": {func(f *fixture, _ *engine.Env) { f.settingsYAML = "storageClass: premium\n" + f.settingsYAML }, model.StatusFail, "storage class premium (from the settings file)"},
+	}
+	for name, c := range cases {
+		t.Run(name, func(t *testing.T) {
+			f := newFixture(t)
+			c.mutate(f, nil)
+			env := clusterEnv(f)
+			if name == "wffc without image" {
+				env.ProbeImage = ""
+			}
+			r := resultsFor(runChecks(t, env), "K8S-10")[0]
+			if r.Status != c.status || !strings.Contains(evidenceText([]model.Result{r}), c.want) {
+				t.Fatalf("%s\n%s", r.Status, evidenceText([]model.Result{r}))
+			}
+		})
+	}
+}
+
+func TestK8S10WaitForFirstConsumerCreatesRestrictedConsumer(t *testing.T) {
+	wffc := storagev1.VolumeBindingWaitForFirstConsumer
+	f := newFixture(t)
+	f.storageClasses[0].VolumeBindingMode = &wffc
+	env := clusterEnv(f)
+	runChecks(t, env)
+	pod, err := f.core.CoreV1().Pods(f.runNamespace).Get(context.Background(), testConsumerPod, metav1.GetOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if *pod.Spec.SecurityContext.RunAsNonRoot != true || pod.Spec.Volumes[0].PersistentVolumeClaim.ClaimName != testPVCName {
+		t.Fatalf("%+v", pod.Spec)
+	}
+}
+
+func TestClusterWriteChecksStayInRunNamespace(t *testing.T) {
+	f := newFixture(t)
+	runChecks(t, clusterEnv(f))
+	for _, a := range f.core.Actions() {
+		switch a.GetVerb() {
+		case "get", "list", "watch":
+		case "create":
+			res := a.GetResource().Resource
+			if res != "selfsubjectaccessreviews" && a.GetNamespace() != f.runNamespace {
+				t.Errorf("create %s in %q", res, a.GetNamespace())
+			}
+		default:
+			t.Errorf("%s %s", a.GetVerb(), a.GetResource().Resource)
+		}
+	}
+}
+
+func TestClusterWriteChecksSkipWithoutNamespace(t *testing.T) {
+	f := newFixture(t)
+	f.runNamespace = ""
+	env := clusterEnv(f)
+	env.RunNamespaceErr = errors.New("namespaces is forbidden")
+	rep := runChecks(t, env)
+	for _, id := range []string{"K8S-10", "K8S-11"} {
+		r := resultsFor(rep, id)[0]
+		if r.Status != model.StatusSkipped || !strings.Contains(*r.SkippedReason, "namespaces is forbidden") {
+			t.Errorf("%s: %s", id, r.Status)
+		}
 	}
 }

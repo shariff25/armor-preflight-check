@@ -476,3 +476,24 @@ func TestInterruptAbortsRun(t *testing.T) {
 		t.Fatalf("got %v", err)
 	}
 }
+
+func TestCatalogTimeoutOverride(t *testing.T) {
+	e := env(t, ModeCluster)
+	e.Catalog.Check("K8S-11").TimeoutSeconds = 1
+	reg := allPass(e)
+	reg["K8S-11"] = func(ctx context.Context, _ *Env, d *catalog.Check) []model.Result {
+		select {
+		case <-time.After(300 * time.Millisecond):
+			return resultsFor(d, model.StatusPass, nil)
+		case <-ctx.Done():
+			return nil
+		}
+	}
+	rep, err := Run(context.Background(), e, reg, Options{Timeout: 50 * time.Millisecond})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if r := find(rep, "K8S-11", model.ClusterScope()); r.Status != model.StatusPass {
+		t.Fatalf("K8S-11 should use its own 1s timeout: %+v", r)
+	}
+}

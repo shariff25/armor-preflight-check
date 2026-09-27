@@ -102,8 +102,8 @@ code { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; fo
   <h2>Probes and permissions</h2>
   {{if .Rec.Probes}}
   <div class="table-wrap"><table>
-    <tr><th>Node pool</th><th>Node</th><th>Pod</th><th>Image</th><th>Digest</th></tr>
-    {{range .Rec.Probes}}<tr><td>{{.NodePool}}</td><td>{{.Node}}</td><td>{{.Pod}}</td><td><code>{{.Image}}</code></td><td><code>{{.ImageDigest}}</code></td></tr>
+    <tr><th>Node pool</th><th>Node</th><th>Pod</th><th>Image</th><th>Digest</th><th>Outcome</th></tr>
+    {{range .Rec.Probes}}<tr><td>{{.NodePool}}</td><td>{{.Node}}</td><td>{{.Pod}}</td><td><code>{{.Image}}</code></td><td><code>{{.ImageDigest}}</code></td><td>{{if .Error}}{{.Error}}{{else}}result collected{{end}}</td></tr>
     {{end}}
   </table></div>
   {{else}}<p class="note">No probe pods ran{{if eq .Rec.Run.Mode "workstation"}} (workstation mode makes no changes to the cluster){{end}}.</p>{{end}}

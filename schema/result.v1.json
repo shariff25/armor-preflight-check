@@ -63,7 +63,8 @@
           "node": { "type": "string" },
           "pod": { "type": "string" },
           "image": { "type": "string" },
-          "imageDigest": { "type": "string" }
+          "imageDigest": { "type": "string" },
+          "error": { "type": "string" }
         }
       }
     },

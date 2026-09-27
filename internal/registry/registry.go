@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"net/url"
 	"regexp"
@@ -56,6 +57,12 @@ func (c *Client) Ping(ctx context.Context) error {
 
 // Manifest reports whether repo:ref (a tag or digest) exists, and its digest.
 func (c *Client) Manifest(ctx context.Context, repo, ref string) (exists bool, digest string, err error) {
+	if !repoRE.MatchString(repo) {
+		return false, "", fmt.Errorf("invalid repository name %q", repo)
+	}
+	if !tagRE.MatchString(ref) && !digestRE.MatchString(ref) {
+		return false, "", fmt.Errorf("invalid tag or digest %q", ref)
+	}
 	u := fmt.Sprintf("%s/v2/%s/manifests/%s", c.base(), repo, url.PathEscape(ref))
 	resp, err := c.do(ctx, http.MethodHead, u, "repository:"+repo+":pull", manifestAccept)
 	if err != nil {
@@ -159,6 +166,12 @@ func (c *Client) answer(ctx context.Context, challenge, scope string) (string, e
 	if err != nil || realm.Scheme != "https" {
 		return "", fmt.Errorf("registry token realm %q is not https", p["realm"])
 	}
+	// The realm comes from the registry's response. Only send credentials
+	// to the registry itself or a host in its parent domain, so a hostile
+	// or spoofed registry cannot collect them for an arbitrary server.
+	if !sameSite(c.Host, realm.Host) {
+		return "", fmt.Errorf("%w: token realm %s is outside the registry's domain (%s); refusing to send credentials there", ErrUnauthorized, realm.Host, c.Host)
+	}
 	q := realm.Query()
 	if p["service"] != "" {
 		q.Set("service", p["service"])
@@ -206,4 +219,29 @@ func (c *Client) answer(ctx context.Context, challenge, scope string) (string, e
 	c.tokens[scope] = t
 	c.mu.Unlock()
 	return "Bearer " + t, nil
+}
+
+// sameSite reports whether realmHost is the registry host, or shares the
+// registry's parent domain (auth.example.com for cr.example.com).
+func sameSite(registryHost, realmHost string) bool {
+	rh, rp := hostOnly(registryHost), hostOnly(realmHost)
+	if strings.EqualFold(rh, rp) {
+		return true
+	}
+	parent := rh
+	if i := strings.IndexByte(rh, '.'); i >= 0 {
+		parent = rh[i+1:]
+	}
+	// A parent with no dot (a TLD) or an IP address is too broad to trust.
+	if !strings.Contains(parent, ".") || net.ParseIP(rh) != nil {
+		return false
+	}
+	return strings.HasSuffix(strings.ToLower(rp), "."+strings.ToLower(parent))
+}
+
+func hostOnly(hostport string) string {
+	if h, _, err := net.SplitHostPort(hostport); err == nil {
+		return h
+	}
+	return hostport
 }

@@ -11,6 +11,7 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
+	"io"
 	"net"
 	"net/http"
 	"net/url"
@@ -22,6 +23,10 @@ import (
 	"github.com/shariff25/agent-goverance-OS/armor-preflight/internal/probe/protocol"
 	"github.com/shariff25/agent-goverance-OS/armor-preflight/internal/tlsutil"
 )
+
+// maxHeaderBytes caps how much of a response the probe reads (status line
+// and headers), so a hostile endpoint or proxy cannot exhaust its memory.
+const maxHeaderBytes = 64 << 10
 
 // Resolver resolves host names.
 type Resolver interface {
@@ -132,7 +137,7 @@ func (t *Tester) connect(ctx context.Context, proxied bool, dialAddr, target str
 		conn.Close()
 		return nil, fmt.Errorf("proxy %s: %w", t.Proxy.Host, err)
 	}
-	br := bufio.NewReader(conn)
+	br := bufio.NewReader(io.LimitReader(conn, maxHeaderBytes))
 	resp, err := http.ReadResponse(br, &http.Request{Method: http.MethodConnect})
 	if err != nil {
 		conn.Close()
@@ -219,7 +224,7 @@ func (t *Tester) get(conn *tls.Conn, host, addr, path string) protocol.Stage {
 	if _, err := conn.Write([]byte(req)); err != nil {
 		return fail(addr, protocol.StageHTTP, "request failed: %s", describe(err, t.Timeout))
 	}
-	resp, err := http.ReadResponse(bufio.NewReader(conn), nil)
+	resp, err := http.ReadResponse(bufio.NewReader(io.LimitReader(conn, maxHeaderBytes)), nil)
 	if err != nil {
 		return fail(addr, protocol.StageHTTP, "no HTTP response: %s", describe(err, t.Timeout))
 	}

@@ -2,8 +2,10 @@ package engine
 
 import (
 	"context"
+	"errors"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -495,5 +497,40 @@ func TestCatalogTimeoutOverride(t *testing.T) {
 	}
 	if r := find(rep, "K8S-11", model.ClusterScope()); r.Status != model.StatusPass {
 		t.Fatalf("K8S-11 should use its own 1s timeout: %+v", r)
+	}
+}
+
+func TestMemo(t *testing.T) {
+	e := &Env{}
+	calls := 0
+	fail := true
+	fn := func() (any, error) {
+		calls++
+		if fail {
+			return nil, errors.New("transient")
+		}
+		return calls, nil
+	}
+	if _, err := e.Memo("k", fn); err == nil {
+		t.Fatal("error not returned")
+	}
+	fail = false
+	v1, _ := e.Memo("k", fn)
+	v2, _ := e.Memo("k", fn)
+	if v1 != 2 || v2 != 2 || calls != 2 {
+		t.Fatalf("errors must not be cached, results must be: %v %v %d", v1, v2, calls)
+	}
+	var wg sync.WaitGroup
+	var n int32
+	for i := 0; i < 20; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			e.Memo("concurrent", func() (any, error) { atomic.AddInt32(&n, 1); time.Sleep(10 * time.Millisecond); return 1, nil })
+		}()
+	}
+	wg.Wait()
+	if n != 1 {
+		t.Fatalf("concurrent callers fetched %d times", n)
 	}
 }

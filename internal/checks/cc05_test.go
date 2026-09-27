@@ -146,3 +146,41 @@ func TestCC05SkippedWhenREG03FailsForThePool(t *testing.T) {
 		}
 	}
 }
+
+// A probe that reports a quote but no verification must not pass CC-05.
+func TestCC05RequiresVerification(t *testing.T) {
+	env := sgxEnv(t, nil)
+	for node, res := range env.Probes.NodeResults {
+		var kept []protocol.Stage
+		for _, st := range res.Stages {
+			if st.Stage == protocol.StageQuote {
+				kept = append(kept, st)
+			}
+		}
+		res.Stages = kept
+		env.Probes.NodeResults[node] = res
+	}
+	for _, r := range resultsFor(runChecks(t, env), "CC-05") {
+		if r.Status != model.StatusFail || !strings.Contains(evidenceText([]model.Result{r}), "did not report a verified quote") {
+			t.Errorf("%s: %s", r.Scope, r.Status)
+		}
+	}
+}
+
+// A verify stage claiming success without the nonce check must not pass.
+func TestCC05RequiresNonceConfirmation(t *testing.T) {
+	env := sgxEnv(t, nil)
+	for node, res := range env.Probes.NodeResults {
+		for i := range res.Stages {
+			if res.Stages[i].Stage == protocol.StageVerify {
+				delete(res.Stages[i].Data, protocol.DataNonceMatches)
+			}
+		}
+		env.Probes.NodeResults[node] = res
+	}
+	for _, r := range resultsFor(runChecks(t, env), "CC-05") {
+		if r.Status != model.StatusFail {
+			t.Errorf("%s: %s", r.Scope, r.Status)
+		}
+	}
+}

@@ -142,10 +142,25 @@ func RenderFirewallCSV(rows []FirewallRow) ([]byte, error) {
 		return nil, err
 	}
 	for _, r := range rows {
-		if err := w.Write([]string{r.SourceSubnet, r.Destination, strconv.Itoa(r.Port), "TCP", "outbound", r.Purpose, r.CheckID}); err != nil {
+		row := []string{r.SourceSubnet, r.Destination, strconv.Itoa(r.Port), "TCP", "outbound", r.Purpose, r.CheckID}
+		for i := range row {
+			row[i] = csvSafe(row[i])
+		}
+		if err := w.Write(row); err != nil {
 			return nil, err
 		}
 	}
 	w.Flush()
 	return buf.Bytes(), w.Error()
+}
+
+// csvSafe stops spreadsheet formula injection (CWE-1236): a cell starting
+// with =, +, -, @, tab or carriage return is evaluated by Excel and Sheets,
+// so it is prefixed with a quote. Real subnets, host names and IDs never
+// start with those characters.
+func csvSafe(v string) string {
+	if v != "" && strings.ContainsRune("=+-@\t\r", rune(v[0])) {
+		return "'" + v
+	}
+	return v
 }

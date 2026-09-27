@@ -21,7 +21,7 @@ func SGXNodes(ctx context.Context, env *engine.Env) ([]orchestrator.NodeTarget, 
 	if env.Kube == nil {
 		return nil, env.KubeErr
 	}
-	c, err := discover(ctx, env.Kube.Core, env.Params())
+	c, err := discover(ctx, env)
 	if err != nil {
 		return nil, err
 	}
@@ -86,7 +86,14 @@ func quoteResult(scope model.Scope, stages []protocol.Stage) model.Result {
 		return model.Result{Scope: scope}.Skipped("the SGX probe reported no quote")
 	}
 	r := verdict(scope, evidence...)
-	if r.Status != model.StatusPass || verify == nil {
+	if r.Status != model.StatusPass {
+		return r
+	}
+	// A quote that was never verified proves nothing: never pass without a
+	// successful verify stage that confirms the nonce.
+	if verify == nil || verify.Data[protocol.DataNonceMatches] != "true" {
+		r.Status = model.StatusFail
+		r.Evidence = append(r.Evidence, model.Evidence{Stage: protocol.StageVerify, OK: false, Detail: "the SGX probe did not report a verified quote bound to this run's nonce"})
 		return r
 	}
 	status := verify.Data[protocol.DataTCBStatus]

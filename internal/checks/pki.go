@@ -5,13 +5,13 @@ import (
 	"crypto/x509"
 	"encoding/pem"
 	"fmt"
-	"os"
 	"regexp"
 	"strings"
 	"time"
 
 	"github.com/shariff25/agent-goverance-OS/armor-preflight/internal/catalog"
 	"github.com/shariff25/agent-goverance-OS/armor-preflight/internal/engine"
+	"github.com/shariff25/agent-goverance-OS/armor-preflight/internal/fsutil"
 	"github.com/shariff25/agent-goverance-OS/armor-preflight/internal/model"
 )
 
@@ -28,7 +28,7 @@ func pki01(_ context.Context, env *engine.Env, _ *catalog.Check) []model.Result 
 
 // loadChain reads a PEM file of certificates, leaf first.
 func loadChain(path string) ([]*x509.Certificate, error) {
-	b, err := os.ReadFile(path)
+	b, err := fsutil.ReadLimited(path, fsutil.MaxPEMBytes)
 	if err != nil {
 		return nil, err
 	}

@@ -384,3 +384,58 @@ func TestWriteFilesRedacts(t *testing.T) {
 		t.Errorf("stray files: %v", entries)
 	}
 }
+
+// Pen test: a destination or purpose that looks like a formula is
+// neutralised in the CSV (CWE-1236).
+func TestCSVFormulaInjection(t *testing.T) {
+	b, err := RenderFirewallCSV([]FirewallRow{{SourceSubnet: "=HYPERLINK(\"http://evil\")", Destination: "@SUM(1+1)", Port: 443, Purpose: "+cmd|' /C calc'!A0", CheckID: "-NET-02"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	line := strings.Split(string(b), "\n")[1]
+	for _, bad := range []string{",=", ",@", ",+", ",-"} {
+		if strings.Contains(","+line, bad) {
+			t.Fatalf("formula not neutralised: %s", line)
+		}
+	}
+	if !strings.HasPrefix(line, "\"'=HYPERLINK") {
+		t.Fatalf("got %s", line)
+	}
+}
+
+// Pen test: ANSI escape sequences in evidence cannot reach the terminal.
+func TestTerminalStripsControlCharacters(t *testing.T) {
+	rec := sample(t)
+	rec.Results[3].Evidence[1].Detail = "timed out\x1b[2J\x1b[1;1HREADY — all checks passed\x07"
+	var buf bytes.Buffer
+	WriteTerminal(&buf, rec, nil)
+	if strings.ContainsAny(buf.String(), "\x1b\x07") {
+		t.Fatalf("control characters reached the terminal: %q", buf.String())
+	}
+	if !strings.Contains(buf.String(), "timed out?[2J") {
+		t.Fatalf("got %q", buf.String())
+	}
+}
+
+func TestHTMLHasRestrictiveCSP(t *testing.T) {
+	b, _ := RenderHTML(sample(t))
+	if !strings.Contains(string(b), `content="default-src 'none'; style-src 'unsafe-inline'`) {
+		t.Fatal("missing Content-Security-Policy")
+	}
+}
+
+func TestOutputPermissions(t *testing.T) {
+	dir := filepath.Join(t.TempDir(), "out")
+	files, err := WriteFiles(dir, sample(t), fwInputs(t, nil), redact.New())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if fi, _ := os.Stat(dir); fi.Mode().Perm() != 0o750 {
+		t.Errorf("dir mode %v", fi.Mode().Perm())
+	}
+	for _, f := range files {
+		if fi, _ := os.Stat(f); fi.Mode().Perm() != 0o640 {
+			t.Errorf("%s mode %v", f, fi.Mode().Perm())
+		}
+	}
+}

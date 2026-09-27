@@ -260,7 +260,7 @@ func sgxPools(ctx context.Context, env *engine.Env) (func(string) bool, []model.
 	if env.Kube == nil {
 		return nil, noKube(env)
 	}
-	c, err := discover(ctx, env.Kube.Core, env.Params())
+	c, err := discover(ctx, env)
 	if err != nil {
 		return nil, skip(err.Error())
 	}

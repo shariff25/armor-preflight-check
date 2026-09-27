@@ -15,7 +15,7 @@ func cc01(ctx context.Context, env *engine.Env, _ *catalog.Check) []model.Result
 		return noKube(env)
 	}
 	p := env.Params()
-	c, err := discover(ctx, env.Kube.Core, p)
+	c, err := discover(ctx, env)
 	if err != nil {
 		return skip(err.Error())
 	}
@@ -45,7 +45,7 @@ func cc02(ctx context.Context, env *engine.Env, _ *catalog.Check) []model.Result
 		return noKube(env)
 	}
 	p := env.Params()
-	c, err := discover(ctx, env.Kube.Core, p)
+	c, err := discover(ctx, env)
 	if err != nil {
 		return skip(err.Error())
 	}

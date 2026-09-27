@@ -101,6 +101,44 @@ type Env struct {
 
 	artifactsMu sync.Mutex
 	artifacts   map[string][]byte
+
+	memoMu sync.Mutex
+	memo   map[string]*memoEntry
+}
+
+type memoEntry struct {
+	mu    sync.Mutex
+	done  bool
+	value any
+}
+
+// Memo returns the cached value for key, computing it with fn on first use.
+// Checks share expensive cluster-wide reads (all nodes, all pods) this way.
+// Only successful results are cached, so a check that times out does not
+// poison the cache for the others; concurrent callers wait for one fetch.
+func (e *Env) Memo(key string, fn func() (any, error)) (any, error) {
+	e.memoMu.Lock()
+	if e.memo == nil {
+		e.memo = map[string]*memoEntry{}
+	}
+	ent := e.memo[key]
+	if ent == nil {
+		ent = &memoEntry{}
+		e.memo[key] = ent
+	}
+	e.memoMu.Unlock()
+
+	ent.mu.Lock()
+	defer ent.mu.Unlock()
+	if ent.done {
+		return ent.value, nil
+	}
+	v, err := fn()
+	if err != nil {
+		return nil, err
+	}
+	ent.value, ent.done = v, true
+	return v, nil
 }
 
 // AddArtifact records an extra output file (for example the imageOverrides

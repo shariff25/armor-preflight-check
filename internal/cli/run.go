@@ -189,7 +189,7 @@ func (o *runOptions) run(ctx context.Context, stdout io.Writer) (err error) {
 	}
 
 	if len(rep.InternalErrors) > 0 {
-		return exitcode.ToolFailure(fmt.Errorf("Preflight hit %d internal error(s), so the result cannot be trusted", len(rep.InternalErrors)))
+		return exitcode.ToolFailure(fmt.Errorf("preflight hit %d internal error(s), so the result cannot be trusted", len(rep.InternalErrors)))
 	}
 	if len(rep.Unimplemented) > 0 {
 		return exitcode.ToolFailure(fmt.Errorf("this build does not implement %d of %d checks, so the verdict is incomplete",

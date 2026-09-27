@@ -64,6 +64,10 @@ func Load(o Options) (*Clients, error) {
 func FromConfig(cfg *rest.Config, contextName string, o Options) (*Clients, error) {
 	cfg = rest.CopyConfig(cfg)
 	cfg.UserAgent = "armor-preflight"
+	// JSON, not protobuf, so the Guard can read request bodies (it refuses
+	// what it cannot parse).
+	cfg.ContentType = "application/json"
+	cfg.AcceptContentTypes = "application/json"
 	guard := &Guard{Mode: o.Mode, Namespace: o.Namespace}
 	cfg.Wrap(func(rt http.RoundTripper) http.RoundTripper {
 		guard.Next = rt

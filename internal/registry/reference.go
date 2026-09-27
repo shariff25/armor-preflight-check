@@ -36,7 +36,12 @@ func (r Reference) Ref() string {
 	return r.Tag
 }
 
-var digestRE = regexp.MustCompile(`^sha256:[a-f0-9]{64}$`)
+// OCI distribution grammar: repository path components, tags and digests.
+var (
+	digestRE = regexp.MustCompile(`^sha256:[a-f0-9]{64}$`)
+	repoRE   = regexp.MustCompile(`^[a-z0-9]+(?:(?:[._]|__|-+)[a-z0-9]+)*(?:/[a-z0-9]+(?:(?:[._]|__|-+)[a-z0-9]+)*)*$`)
+	tagRE    = regexp.MustCompile(`^[A-Za-z0-9_][A-Za-z0-9._-]{0,127}$`)
+)
 
 // ParseReference parses host/repo[:tag][@sha256:...]. The host is required:
 // release manifests always name the registry.
@@ -63,8 +68,11 @@ func ParseReference(s string) (Reference, error) {
 		r.Tag, s = s[colon+1:], s[:colon]
 	}
 	r.Repo = s
-	if r.Repo == "" {
-		return r, fmt.Errorf("reference has no repository")
+	if !repoRE.MatchString(r.Repo) {
+		return r, fmt.Errorf("invalid repository name %q", r.Repo)
+	}
+	if r.Tag != "" && !tagRE.MatchString(r.Tag) {
+		return r, fmt.Errorf("invalid tag %q", r.Tag)
 	}
 	if r.Tag == "" && r.Digest == "" {
 		return r, fmt.Errorf("reference %s has neither tag nor digest", r.Host+"/"+r.Repo)

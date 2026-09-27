@@ -1,8 +1,12 @@
 package nettest
 
 import (
+	"bufio"
 	"context"
+	"crypto/tls"
+	"net"
 	"net/url"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -176,4 +180,56 @@ func TestNoProxyMatch(t *testing.T) {
 			t.Errorf("%s: %v", host, got)
 		}
 	}
+}
+
+// Pen test: an endpoint that streams headers forever cannot exhaust the
+// probe's memory; the HTTP stage fails once the header budget is used up.
+func TestEndlessHeadersAreBounded(t *testing.T) {
+	e := setup(t)
+	ca := e.public
+	cert := ca.Issue("endless.example.com")
+	ln, _ := tls.Listen("tcp", "127.0.0.1:0", &tls.Config{Certificates: []tls.Certificate{cert}})
+	defer ln.Close()
+	go func() {
+		c, err := ln.Accept()
+		if err != nil {
+			return
+		}
+		defer c.Close()
+		bufio.NewReader(c).ReadString('\n')
+		c.Write([]byte("HTTP/1.1 200 OK\r\n"))
+		line := []byte("X-Flood: " + strings.Repeat("a", 1000) + "\r\n")
+		for i := 0; i < 100000; i++ { // ~100 MB if read without a limit
+			if _, err := c.Write(line); err != nil {
+				return
+			}
+		}
+	}()
+	tr := e.tester()
+	tr.Timeout = 5 * time.Second
+	tr.Dialer = redirect{to: ln.Addr().String()}
+	tr.Resolver = staticResolver{}
+	var before, after runtime.MemStats
+	runtime.ReadMemStats(&before)
+	st := tr.Test(context.Background(), protocol.Target{Host: "endless.example.com", Port: 443, Path: "/"})
+	runtime.ReadMemStats(&after)
+	h := stage(st, "http")
+	if h == nil || h.OK {
+		t.Fatalf("expected the HTTP stage to fail: %+v", st)
+	}
+	if grown := int64(after.TotalAlloc) - int64(before.TotalAlloc); grown > 20<<20 {
+		t.Fatalf("allocated %d MB reading a hostile response", grown>>20)
+	}
+}
+
+type redirect struct{ to string }
+
+func (r redirect) DialContext(ctx context.Context, network, _ string) (net.Conn, error) {
+	return (&net.Dialer{}).DialContext(ctx, network, r.to)
+}
+
+type staticResolver struct{}
+
+func (staticResolver) LookupHost(context.Context, string) ([]string, error) {
+	return []string{"192.0.2.1"}, nil
 }

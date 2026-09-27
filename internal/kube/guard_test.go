@@ -146,3 +146,28 @@ func TestCleanupMode(t *testing.T) {
 		}
 	}
 }
+
+// Pen test: in cluster mode the guard refuses to create any namespace but
+// the run's own, even without the admission policy installed.
+func TestRunNamespaceGuardChecksNamespaceName(t *testing.T) {
+	c, api := clients(t, Options{Mode: RunNamespace, Namespace: "armor-preflight-20260926-1512-7f3a"})
+	ctx := context.Background()
+	for _, name := range []string{"kube-system-2", "armor-preflight-other-run"} {
+		_, err := c.Core.CoreV1().Namespaces().Create(ctx, &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: name}}, metav1.CreateOptions{})
+		var blocked *ErrBlocked
+		if !errors.As(err, &blocked) {
+			t.Errorf("%s: got %v", name, err)
+		}
+	}
+	for _, s := range api.seen {
+		if strings.HasPrefix(s, "POST /api/v1/namespaces") {
+			t.Fatalf("a foreign namespace create reached the API server: %s", s)
+		}
+	}
+	if _, err := c.Core.CoreV1().Namespaces().Create(ctx, &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "armor-preflight-20260926-1512-7f3a"}}, metav1.CreateOptions{}); err != nil {
+		var blocked *ErrBlocked
+		if errors.As(err, &blocked) {
+			t.Fatalf("own namespace blocked: %v", err)
+		}
+	}
+}

@@ -1,12 +1,12 @@
 package checks
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"net"
-	"os"
 	"sort"
 	"strings"
 	"time"
@@ -18,6 +18,7 @@ import (
 
 	"github.com/shariff25/agent-goverance-OS/armor-preflight/internal/catalog"
 	"github.com/shariff25/agent-goverance-OS/armor-preflight/internal/engine"
+	"github.com/shariff25/agent-goverance-OS/armor-preflight/internal/fsutil"
 	"github.com/shariff25/agent-goverance-OS/armor-preflight/internal/model"
 	"github.com/shariff25/agent-goverance-OS/armor-preflight/internal/registry"
 	"github.com/shariff25/agent-goverance-OS/armor-preflight/internal/settings"
@@ -90,12 +91,11 @@ func reg02(ctx context.Context, env *engine.Env, _ *catalog.Check) []model.Resul
 // chart alone, saying which in the returned note.
 func releaseImages(env *engine.Env) ([]registry.Reference, string, error) {
 	if path := env.Settings.Registry.ReleaseManifestPath; path != "" {
-		f, err := os.Open(path)
+		b, err := fsutil.ReadLimited(path, fsutil.MaxManifestBytes)
 		if err != nil {
 			return nil, "", fmt.Errorf("read registry.releaseManifestPath: %w", err)
 		}
-		defer f.Close()
-		refs, err := registry.ParseManifestList(f)
+		refs, err := registry.ParseManifestList(bytes.NewReader(b))
 		if err != nil {
 			return nil, "", fmt.Errorf("parse %s: %w", path, err)
 		}

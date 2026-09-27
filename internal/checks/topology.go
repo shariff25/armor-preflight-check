@@ -9,8 +9,6 @@ import (
 
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/client-go/kubernetes"
 
 	"github.com/shariff25/agent-goverance-OS/armor-preflight/internal/catalog"
 	"github.com/shariff25/agent-goverance-OS/armor-preflight/internal/engine"
@@ -36,8 +34,9 @@ type node struct {
 	system bool
 }
 
-func discover(ctx context.Context, core kubernetes.Interface, p catalog.Parameters) (*cluster, error) {
-	list, err := core.CoreV1().Nodes().List(ctx, metav1.ListOptions{})
+func discover(ctx context.Context, env *engine.Env) (*cluster, error) {
+	p := env.Params()
+	items, err := listNodes(ctx, env)
 	if err != nil {
 		return nil, fmt.Errorf("list nodes: %w", err)
 	}
@@ -46,7 +45,7 @@ func discover(ctx context.Context, core kubernetes.Interface, p catalog.Paramete
 		skuRE = regexp.MustCompile(p.SGXPool.SKUPattern)
 	}
 	c := &cluster{pools: map[string][]*node{}}
-	for _, n := range list.Items {
+	for _, n := range items {
 		nd := node{n: n, name: n.Name, sku: n.Labels[p.InstanceTypeLabel]}
 		nd.pool = n.Labels[p.NodePoolLabel]
 		if nd.pool == "" {
@@ -123,7 +122,7 @@ func Topology(ctx context.Context, env *engine.Env) engine.Topology {
 	if env.Kube == nil {
 		return t
 	}
-	c, err := discover(ctx, env.Kube.Core, env.Params())
+	c, err := discover(ctx, env)
 	if err != nil {
 		return t
 	}

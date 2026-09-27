@@ -1,7 +1,10 @@
 package kube
 
 import (
+	"bytes"
+	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"strings"
 	"sync"
@@ -55,7 +58,13 @@ func (e *ErrBlocked) Error() string {
 
 // RoundTrip implements http.RoundTripper.
 func (g *Guard) RoundTrip(req *http.Request) (*http.Response, error) {
-	if !g.allowed(req.Method, req.URL.Path) {
+	ok := g.allowed(req.Method, req.URL.Path)
+	if ok && g.Mode == RunNamespace && req.Method == http.MethodPost && strings.TrimSuffix(req.URL.Path, "/") == "/api/v1/namespaces" {
+		// Creating a namespace: check it is this run's, so the guard does
+		// not depend on the admission policy being installed.
+		ok = g.createsRunNamespace(req)
+	}
+	if !ok {
 		g.mu.Lock()
 		g.blocked = append(g.blocked, req.Method+" "+req.URL.Path)
 		g.mu.Unlock()
@@ -94,9 +103,8 @@ func (g *Guard) allowed(method, path string) bool {
 	ns := "/api/v1/namespaces/" + g.Namespace
 	switch {
 	case method == http.MethodPost && path == "/api/v1/namespaces":
-		// Creating the run namespace itself. The body is not inspected
-		// here; the orchestrator only ever creates its own namespace, and
-		// the shipped admission policy enforces the name (D-2).
+		// Creating the run namespace itself; RoundTrip checks the name in
+		// the request body.
 		return true
 	case path == ns, strings.HasPrefix(path, ns+"/"):
 		return true
@@ -104,4 +112,28 @@ func (g *Guard) allowed(method, path string) bool {
 		return true
 	}
 	return false
+}
+
+// createsRunNamespace reads a namespace-create body (restoring it for the
+// real request) and reports whether it names the run namespace.
+func (g *Guard) createsRunNamespace(req *http.Request) bool {
+	if req.Body == nil {
+		return false
+	}
+	body, err := io.ReadAll(io.LimitReader(req.Body, 1<<20))
+	req.Body.Close()
+	if err != nil {
+		return false
+	}
+	req.Body = io.NopCloser(bytes.NewReader(body))
+	req.GetBody = func() (io.ReadCloser, error) { return io.NopCloser(bytes.NewReader(body)), nil }
+	var ns struct {
+		Metadata struct {
+			Name string `json:"name"`
+		} `json:"metadata"`
+	}
+	if json.Unmarshal(body, &ns) != nil {
+		return false // not JSON (for example protobuf): refuse rather than guess
+	}
+	return ns.Metadata.Name == g.Namespace
 }

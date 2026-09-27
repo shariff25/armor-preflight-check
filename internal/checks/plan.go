@@ -2,9 +2,9 @@ package checks
 
 import (
 	"fmt"
-	"os"
 
 	"github.com/shariff25/agent-goverance-OS/armor-preflight/internal/engine"
+	"github.com/shariff25/agent-goverance-OS/armor-preflight/internal/fsutil"
 	"github.com/shariff25/agent-goverance-OS/armor-preflight/internal/probe/protocol"
 )
 
@@ -35,7 +35,7 @@ func Plan(env *engine.Env, runID string) (*ProbePlan, error) {
 	}
 	var trustedCA string
 	if p := st.Proxy.TrustedCAPath; p != "" {
-		b, err := os.ReadFile(p)
+		b, err := fsutil.ReadCertificatesPEM(p)
 		if err != nil {
 			return nil, fmt.Errorf("read proxy.trustedCaPath: %w", err)
 		}

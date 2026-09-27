@@ -10,7 +10,8 @@ import (
 
 // WriteTerminal prints the summary: the verdict, counts per area, each
 // failure with its owning team, and what was skipped and why.
-func WriteTerminal(w io.Writer, rec *Record, files []string) {
+func WriteTerminal(out io.Writer, rec *Record, files []string) {
+	w := &controlStripper{w: out}
 	target := "no settings file"
 	if rec.Target.ArmorVersion != "" {
 		target = "Armor " + rec.Target.ArmorVersion
@@ -114,4 +115,26 @@ func firstLine(s string) string {
 		return s[:i]
 	}
 	return s
+}
+
+// controlStripper removes terminal control characters (ESC and the other C0
+// and C1 controls, except newline and tab) from everything printed. Evidence
+// can quote text from the cluster or from endpoints, and an ANSI escape
+// sequence in it could otherwise rewrite what the operator sees.
+type controlStripper struct{ w io.Writer }
+
+func (c *controlStripper) Write(p []byte) (int, error) {
+	clean := strings.Map(func(r rune) rune {
+		switch {
+		case r == '\n' || r == '\t':
+			return r
+		case r < 0x20 || r == 0x7f || (r >= 0x80 && r < 0xa0):
+			return '?'
+		}
+		return r
+	}, string(p))
+	if _, err := io.WriteString(c.w, clean); err != nil {
+		return 0, err
+	}
+	return len(p), nil
 }

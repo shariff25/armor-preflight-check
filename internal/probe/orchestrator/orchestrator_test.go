@@ -3,6 +3,8 @@ package orchestrator
 import (
 	"context"
 	"fmt"
+	"net/http"
+	"net/http/httptest"
 	"strings"
 	"testing"
 	"time"
@@ -10,7 +12,9 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/kubernetes/fake"
+	"k8s.io/client-go/rest"
 	k8stesting "k8s.io/client-go/testing"
 	psaapi "k8s.io/pod-security-admission/api"
 	"k8s.io/pod-security-admission/policy"
@@ -295,5 +299,27 @@ func TestRemoveLeftovers(t *testing.T) {
 	}
 	if fmt.Sprint(names) != "[armor armor-preflight-unlabelled impostor]" {
 		t.Fatalf("remaining: %v", names)
+	}
+}
+
+// Pen test: a hostile probe cannot make the CLI read an unbounded log;
+// the API server is asked for at most MaxLogBytes.
+func TestLogReadIsBounded(t *testing.T) {
+	var query string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		query = r.URL.RawQuery
+		w.Write([]byte("log"))
+	}))
+	defer srv.Close()
+	core, err := kubernetes.NewForConfig(&rest.Config{Host: srv.URL})
+	if err != nil {
+		t.Fatal(err)
+	}
+	o := New(core, runID, "img")
+	if _, err := o.Logs(context.Background(), "ns", "probe-x"); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(query, fmt.Sprintf("limitBytes=%d", MaxLogBytes)) {
+		t.Fatalf("log request did not set limitBytes: %s", query)
 	}
 }

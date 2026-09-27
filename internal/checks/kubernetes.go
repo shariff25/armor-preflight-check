@@ -89,7 +89,7 @@ func k8s02(ctx context.Context, env *engine.Env, _ *catalog.Check) []model.Resul
 		return noKube(env)
 	}
 	p := env.Params()
-	c, err := discover(ctx, env.Kube.Core, p)
+	c, err := discover(ctx, env)
 	if err != nil {
 		return one(verdict(model.ClusterScope(), ev("nodes", "", false, "%v", err)))
 	}
@@ -112,7 +112,7 @@ func k8s03(ctx context.Context, env *engine.Env, _ *catalog.Check) []model.Resul
 		return noKube(env)
 	}
 	p := env.Params()
-	c, err := discover(ctx, env.Kube.Core, p)
+	c, err := discover(ctx, env)
 	if err != nil {
 		return one(verdict(model.ClusterScope(), ev("nodes", "", false, "%v", err)))
 	}
@@ -133,13 +133,13 @@ func k8s04(ctx context.Context, env *engine.Env, _ *catalog.Check) []model.Resul
 	if env.Kube == nil {
 		return noKube(env)
 	}
-	nodes, err := env.Kube.Core.CoreV1().Nodes().List(ctx, metav1.ListOptions{})
+	nodes, err := listNodes(ctx, env)
 	if err != nil {
 		return skip("could not list nodes: " + err.Error())
 	}
 	want := env.Params().ValidatedOS
 	var out []model.Result
-	for _, n := range nodes.Items {
+	for _, n := range nodes {
 		info := n.Status.NodeInfo
 		scope := model.NodeScope(n.Name)
 		switch {
@@ -181,12 +181,12 @@ func crdsInGroups(ctx context.Context, env *engine.Env, groups []string) ([]stri
 // podsWithImage finds pods whose containers use an image containing any of
 // the given substrings, as "namespace/pod (image)".
 func podsWithImage(ctx context.Context, env *engine.Env, substrings ...string) ([]corev1.Pod, error) {
-	pods, err := env.Kube.Core.CoreV1().Pods("").List(ctx, metav1.ListOptions{})
+	pods, err := listPods(ctx, env)
 	if err != nil {
 		return nil, fmt.Errorf("list pods: %w", err)
 	}
 	var out []corev1.Pod
-	for _, p := range pods.Items {
+	for _, p := range pods {
 		if imageMatching(p, substrings...) != "" {
 			out = append(out, p)
 		}
@@ -288,7 +288,7 @@ func k8s07(ctx context.Context, env *engine.Env, _ *catalog.Check) []model.Resul
 	if len(classes.Items) == 0 {
 		return one(verdict(model.ClusterScope(), ev("ingressclass", "", false, "no IngressClass exists")))
 	}
-	pods, err := env.Kube.Core.CoreV1().Pods("").List(ctx, metav1.ListOptions{})
+	pods, err := listPods(ctx, env)
 	if err != nil {
 		return one(verdict(model.ClusterScope(), ev("controller", "", false, "list pods: %v", err)))
 	}
@@ -297,7 +297,7 @@ func k8s07(ctx context.Context, env *engine.Env, _ *catalog.Check) []model.Resul
 	for _, ic := range classes.Items {
 		ctrl := ic.Spec.Controller
 		var ready []string
-		for _, p := range pods.Items {
+		for _, p := range pods {
 			if podReady(p) && isIngressPod(p, ctrl) {
 				ready = append(ready, p.Namespace+"/"+p.Name)
 			}
@@ -475,11 +475,11 @@ func k8s12(ctx context.Context, env *engine.Env, _ *catalog.Check) []model.Resul
 // discoverCIDRs reads node pod CIDRs and ServiceCIDR objects.
 func discoverCIDRs(ctx context.Context, env *engine.Env) (pods, services, notes []string) {
 	seen := map[string]bool{}
-	nodes, err := env.Kube.Core.CoreV1().Nodes().List(ctx, metav1.ListOptions{})
+	nodes, err := listNodes(ctx, env)
 	if err != nil {
 		notes = append(notes, "could not list nodes: "+err.Error())
 	} else {
-		for _, n := range nodes.Items {
+		for _, n := range nodes {
 			cidrs := n.Spec.PodCIDRs
 			if len(cidrs) == 0 && n.Spec.PodCIDR != "" {
 				cidrs = []string{n.Spec.PodCIDR}

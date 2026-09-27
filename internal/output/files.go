@@ -13,7 +13,8 @@ import (
 // WriteFiles writes result.json, report.html and firewall-request.csv to
 // dir, masking every registered secret, and returns the paths written.
 func WriteFiles(dir string, rec *Record, fw FirewallInputs, r *redact.Redactor) ([]string, error) {
-	if err := os.MkdirAll(dir, 0o755); err != nil {
+	// Reports describe the customer's infrastructure: owner and group only.
+	if err := os.MkdirAll(dir, 0o750); err != nil {
 		return nil, fmt.Errorf("create output directory: %w", err)
 	}
 	jsonBytes, err := MarshalRecord(rec)
@@ -54,7 +55,7 @@ func writeAtomic(path string, data []byte) error {
 		tmp.Close()
 		return fmt.Errorf("write %s: %w", path, err)
 	}
-	if err := tmp.Chmod(0o644); err != nil {
+	if err := tmp.Chmod(0o640); err != nil {
 		tmp.Close()
 		return fmt.Errorf("write %s: %w", path, err)
 	}

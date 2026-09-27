@@ -470,3 +470,21 @@ func TestClusterWriteChecksSkipWithoutNamespace(t *testing.T) {
 		}
 	}
 }
+
+// Cluster-wide lists are fetched once per run, however many checks use them.
+func TestClusterWideListsAreShared(t *testing.T) {
+	f := newFixture(t)
+	env := f.env(engine.ModeWorkstation)
+	runChecks(t, env)
+	counts := map[string]int{}
+	for _, a := range f.core.Actions() {
+		if a.GetVerb() == "list" {
+			counts[a.GetResource().Resource]++
+		}
+	}
+	// The fixture's topology lookup already listed nodes (then cleared the
+	// action log), so the checks reuse it.
+	if counts["nodes"] > 1 || counts["pods"] != 1 {
+		t.Fatalf("list calls: %v", counts)
+	}
+}

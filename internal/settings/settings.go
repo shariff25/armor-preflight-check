@@ -8,13 +8,14 @@ import (
 	"errors"
 	"fmt"
 	"net/url"
-	"os"
 	"reflect"
 	"regexp"
 	"sort"
 	"strings"
 
 	"sigs.k8s.io/yaml"
+
+	"github.com/shariff25/agent-goverance-OS/armor-preflight/internal/fsutil"
 )
 
 // Settings mirrors the settings file. Fields marked (D-n) are additions
@@ -106,7 +107,7 @@ func Default() *Settings {
 
 // Load reads and validates a settings file.
 func Load(path string) (*Settings, error) {
-	data, err := os.ReadFile(path)
+	data, err := fsutil.ReadLimited(path, fsutil.MaxSettingsBytes)
 	if err != nil {
 		return nil, fmt.Errorf("read settings: %w", err)
 	}

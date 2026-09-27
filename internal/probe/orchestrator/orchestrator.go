@@ -18,6 +18,10 @@ import (
 	"github.com/shariff25/agent-goverance-OS/armor-preflight/internal/probe/protocol"
 )
 
+// MaxLogBytes caps how much of a probe's log is read, so a misbehaving or
+// hostile probe cannot exhaust the CLI's memory. A real result is a few KB.
+const MaxLogBytes = 4 << 20
+
 // LogSource reads a pod's log. Tests replace it; the fake clientset cannot
 // produce real logs.
 type LogSource func(ctx context.Context, namespace, pod string) (string, error)
@@ -39,7 +43,8 @@ type Orchestrator struct {
 func New(core kubernetes.Interface, runID, image string) *Orchestrator {
 	o := &Orchestrator{Core: core, RunID: runID, Image: image, Poll: 2 * time.Second, Now: time.Now, Namespace: NamespaceName(runID)}
 	o.Logs = func(ctx context.Context, ns, pod string) (string, error) {
-		b, err := core.CoreV1().Pods(ns).GetLogs(pod, &corev1.PodLogOptions{Container: ContainerName}).DoRaw(ctx)
+		limit := int64(MaxLogBytes)
+		b, err := core.CoreV1().Pods(ns).GetLogs(pod, &corev1.PodLogOptions{Container: ContainerName, LimitBytes: &limit}).DoRaw(ctx)
 		return string(b), err
 	}
 	return o

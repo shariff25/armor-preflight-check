@@ -3,6 +3,9 @@ package registry
 import (
 	"context"
 	"errors"
+	"net"
+	"net/http"
+	"net/http/httptest"
 	"strings"
 	"testing"
 
@@ -74,5 +77,77 @@ func TestParseReference(t *testing.T) {
 	}
 	if _, err := ParseManifestList(strings.NewReader("ok.example.com/a:1\nbad\n")); err == nil || !strings.Contains(err.Error(), "line 2") {
 		t.Fatalf("got %v", err)
+	}
+}
+
+// Pen test: a registry that advertises a token realm on another domain must
+// not receive the credentials.
+func TestCredentialsNotSentToForeignRealm(t *testing.T) {
+	var leaked []string
+	thief := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if u, p, ok := r.BasicAuth(); ok {
+			leaked = append(leaked, u+":"+p)
+		}
+		w.Write([]byte(`{"token":"x"}`))
+	}))
+	defer thief.Close()
+	evil := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("WWW-Authenticate", `Bearer realm="https://attacker.example.net/token",service="x"`)
+		w.WriteHeader(http.StatusUnauthorized)
+	}))
+	defer evil.Close()
+	client := evil.Client()
+	// Route attacker.example.net to the thief so a leak would be observable.
+	client.Transport.(*http.Transport).DialContext = func(ctx context.Context, network, addr string) (net.Conn, error) {
+		if strings.HasPrefix(addr, "attacker.example.net") {
+			addr = strings.TrimPrefix(thief.URL, "https://")
+		}
+		return (&net.Dialer{}).DialContext(ctx, network, addr)
+	}
+	client.Transport.(*http.Transport).TLSClientConfig.InsecureSkipVerify = true
+	c := &Client{HTTP: client, Host: strings.TrimPrefix(evil.URL, "https://"), Username: "user", Password: "secret"}
+	err := c.Ping(context.Background())
+	if len(leaked) != 0 {
+		t.Fatalf("credentials leaked: %v", leaked)
+	}
+	if err == nil || !strings.Contains(err.Error(), "outside the registry's domain") {
+		t.Fatalf("got %v", err)
+	}
+}
+
+func TestSameSite(t *testing.T) {
+	for _, c := range []struct {
+		reg, realm string
+		want       bool
+	}{
+		{"cr.download.fortanix.com", "cr.download.fortanix.com", true},
+		{"cr.download.fortanix.com", "auth.download.fortanix.com", true},
+		{"cr.download.fortanix.com", "auth.fortanix.com", false},
+		{"cr.download.fortanix.com", "evil.com", false},
+		{"cr.download.fortanix.com", "download.fortanix.com.evil.com", false},
+		{"mirror.corp.example:5000", "mirror.corp.example:5001", true},
+		{"registry.io", "evil.io", false},
+		{"127.0.0.1:5000", "127.0.0.1:443", true},
+		{"10.0.0.1:5000", "0.0.1", false},
+	} {
+		if got := sameSite(c.reg, c.realm); got != c.want {
+			t.Errorf("%s -> %s: %v", c.reg, c.realm, got)
+		}
+	}
+}
+
+// Pen test: repository names cannot walk out of /v2/<repo>/manifests/.
+func TestManifestRejectsPathTraversal(t *testing.T) {
+	c := &Client{HTTP: http.DefaultClient, Host: "cr.example.com"}
+	for _, repo := range []string{"../../v2/_catalog", "armor/../../x", "Armor/Upper", "a//b", ""} {
+		if _, _, err := c.Manifest(context.Background(), repo, "1.0"); err == nil || !strings.Contains(err.Error(), "invalid repository") {
+			t.Errorf("%q: %v", repo, err)
+		}
+	}
+	if _, _, err := c.Manifest(context.Background(), "armor/op", "../x"); err == nil {
+		t.Error("bad tag accepted")
+	}
+	if _, err := ParseReference("cr.example.com/armor/../secret:1"); err == nil {
+		t.Error("ParseReference accepted a traversal")
 	}
 }

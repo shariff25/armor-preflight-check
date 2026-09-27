@@ -245,10 +245,18 @@ func (o *runOptions) startCluster(ctx context.Context, env *engine.Env, orch *or
 	}
 	p := env.Params()
 	pools := orchestrator.PoolsFromNodes(nodes.Items, p.NodePoolLabel, p.InstanceTypeLabel)
-	request := func(pool string) protocol.Request {
-		return protocol.Request{Version: protocol.Version, RunID: orch.RunID, NodePool: pool, Timeout: o.checkTimeout}
+	plan, err := checks.Plan(env, orch.RunID)
+	if err != nil {
+		env.ProbeUnavailable = "could not plan the probes: " + err.Error()
+		return nil, nil
 	}
-	outcome, err := orch.RunProbes(ctx, pools, request, nil, o.probeTimeout)
+	env.ProbeNotes = &engine.ProbeNotes{Images: plan.ImagesNote, Storage: plan.StorageNote}
+	request := func(pool string) protocol.Request {
+		r := plan.Request(pool)
+		r.Timeout = o.checkTimeout
+		return r
+	}
+	outcome, err := orch.RunProbes(ctx, pools, request, plan.Secret, o.probeTimeout)
 	if err != nil {
 		return nil, fmt.Errorf("run interrupted while probes were running: %w", err)
 	}

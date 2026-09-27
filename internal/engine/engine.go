@@ -86,8 +86,10 @@ type Env struct {
 	RunNamespaceErr error
 	// ProbeImage is the probe image reference in cluster mode.
 	ProbeImage string
-	// Probes holds probe results in cluster mode (nil otherwise).
-	Probes *ProbeData
+	// Probes holds probe results in cluster mode (nil otherwise), and
+	// ProbeNotes why parts of the probe plan were left out.
+	Probes     *ProbeData
+	ProbeNotes *ProbeNotes
 
 	// Kube is nil when the kubeconfig could not be loaded; KubeErr says why.
 	Kube    *kube.Clients
@@ -128,6 +130,12 @@ func (e *Env) Artifacts() map[string][]byte {
 type ProbeData struct {
 	Results    map[string]protocol.Result
 	PoolErrors map[string]string
+}
+
+// ProbeNotes explain probe work that was not planned.
+type ProbeNotes struct {
+	Images  string
+	Storage string
 }
 
 // Params returns the catalog parameters.

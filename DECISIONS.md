@@ -152,3 +152,34 @@ The user chose not to gate the build on D-1 to D-3, so the plan's defaults apply
   - Nothing is left after a normal exit, after SIGINT, or after SIGKILL followed by `cleanup`.
   - Probe pods are never scheduled in envtest, so probe results are covered by unit tests. A real cluster run is a manual test.
 - **Probe image.** The Dockerfile is `deploy/probe/Dockerfile`: a static Go build on `gcr.io/distroless/static:nonroot`, user 65532. The runtime image is about 1.8 MB. CI builds it and runs it with a read-only filesystem, all capabilities dropped, no-new-privileges and no network. Signing and the image tarball come with M7.
+
+## M5
+
+- **Staged network test (`internal/probe/nettest`).** Each endpoint is tested DNS, then TCP, then TLS, then HTTP, and each stage is recorded separately. Testing stops at the first failed stage. TCP-only endpoints (syslog) get DNS and TCP only.
+  - Through a proxy, DNS is left to the proxy (recorded as such), and TCP means a successful `CONNECT`.
+  - `NO_PROXY` supports hosts, domain suffixes and CIDRs.
+  - A timeout names the per-stage limit.
+- **TLS handshake versus trust.** The handshake is completed without verification, then the presented chain is verified explicitly: against the public roots in the probe image, and separately against the customer CA from `proxy.trustedCaPath`.
+  - The TLS stage is OK when the handshake completes. NET-02 therefore measures reachability, and NET-03 measures trust.
+  - Nothing is sent over a connection whose chain isn't trusted. The HTTP stage reports "not sent".
+- **D-7, NET-03, changed from the plan.** Instead of pinning expected issuers per endpoint, which would be brittle and would need values Fortanix hasn't published, a chain must verify against the public roots in the distroless image. Otherwise the endpoint fails with its presented issuer and chain. A chain that verifies only against `proxy.trustedCaPath` passes, reported as "intercepted, CA trusted".
+  - Checked live: the probe image, run against real endpoints through this development environment's TLS-inspecting proxy, reported each endpoint as not trusted and named the inspecting CA.
+- **D-6, HTTP paths.** Each endpoint's `httpPath` lives in the catalog: registry `/v2/`, Azure Attestation `/.well-known/openid-configuration`, and `/` for the others. Any HTTP response over trusted TLS counts as reachable, and the status code is recorded. The paths must be confirmed against the live services before release.
+- **Every endpoint is tested from every node pool,** as the brief's endpoint table says. NET-02 reports all of them per pool. CC-03 and CC-04 report the same observations for SGX pools only.
+- **CC-04 without an attestation host.** When `attestation.azureAttestationHost` isn't set, CC-04 tests the Intel endpoint only, and reports warn instead of pass, with the missing setting in the evidence. It is never a silent pass.
+- **NET-07 (clock).** Clock skew is measured against the median `Date` header of the HTTP responses from endpoints already under test (D-14), not NTP. With no HTTP responses, NET-07 is skipped for that pool. Date headers have 1-second resolution, which is enough for the 5-second threshold.
+- **REG-03 (image resolution).** Images come from `registry.releaseManifestPath`, or else the operator chart (still TBD). Each is rewritten to `registry.url`, the registry nodes actually pull from, so direct and mirror mode behave the same. Each is resolved with a manifest HEAD using the registry credentials. No layers are pulled.
+- **BAK-02 (backup storage).** Each pool writes, reads back and deletes `armor-preflight-<run id>-<pool>.txt` in the backup container.
+  - The credential can be the storage account key (Shared Key signing, service version 2021-08-06) or a SAS token; one containing `sig=` is treated as SAS.
+  - A failed delete says to remove the blob by hand.
+  - The client is tested against a local fake that checks Shared Key signatures independently. A run against real Azure Storage is a manual test.
+- **Credentials in probes (D-3).** The registry password and storage credential go into a Secret in the run namespace, mounted read-only at `/var/run/armor-preflight`. The Secret is created only when REG-03 or BAK-02 needs it.
+  - The request ConfigMap never carries a credential; a test checks this.
+  - The probe never prints one; also tested.
+  - The audit lab confirms the Secret is created only in the run namespace.
+- **Registry and mirror URLs may include a port** (`host:5000`). Endpoint resolution splits it, instead of appending 443.
+- **How the probe checks are tested.** The tests run the real probe agent once per node pool, each against its own fake network (`internal/netfixtures`: a test CA, TLS servers standing in for the real endpoints, a CONNECT proxy, a TLS-intercepting proxy, a blob store, and a dialer that can blackhole or refuse). The results then go through the real checks. Covered this way:
+  - The registry blocked from the SGX pool only: NET-02 fails for that pool, names it, and gives one firewall row.
+  - Interception with and without a trusted CA.
+  - DNS failure skipping NET-02 on that pool only.
+  - Refused syslog, a blocked PCCS, refused attestation, a missing image, denied blob access, 8 seconds of clock skew, and a pool whose probe image couldn't be pulled.

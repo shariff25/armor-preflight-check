@@ -2,7 +2,7 @@
 
 `armor-preflight` checks whether a customer environment is ready for a Fortanix Armor on-prem install, before anyone starts the install. It checks every prerequisite from where Armor will actually run and tells each customer team what it needs to fix.
 
-> **Status: milestone M4.** The catalog, engine, outputs, support bundle, workstation checks, cluster mode (temporary namespace, probe pods, K8S-10, K8S-11) and `cleanup` are all in place. The 10 probe-based checks (CC-03 to CC-05, NET-01 to NET-03, NET-06, NET-07, REG-03, BAK-02) arrive in M5 and M6. Until then, `run` lists them as not implemented, writes its outputs with verdict `INCOMPLETE` and exits 3. See [PLAN.md](PLAN.md) for the build order.
+> **Status: milestone M5.** Every check except CC-05 (SGX quote generation, M6) is implemented. That includes the nine probe checks, run from every node pool: DNS, TCP and TLS reachability; TLS interception; syslog; clock skew; PCCS and attestation reachability; image resolution; and the backup blob test. Until CC-05 lands, `run` lists it as not implemented, writes its outputs with verdict `INCOMPLETE` and exits 3. See [PLAN.md](PLAN.md) for the build order.
 
 ## Commands
 
@@ -73,6 +73,14 @@ Secrets the settings file names are masked in everything Preflight prints or wri
 - creates an internal LoadBalancer Service with no selector (K8S-11).
 
 Everything Preflight creates is labelled `app.kubernetes.io/managed-by=armor-preflight` and `armor-preflight/run-id=<run id>`. The namespace is deleted when the run ends, including after Ctrl-C. If the process is killed, `armor-preflight cleanup` removes whatever is left.
+
+Each probe tests every required endpoint from its node pool, one stage at a time: DNS, TCP, TLS, then an HTTP request, sent only once the certificate is trusted. It reports each stage separately. So a blocked firewall path, a missing DNS record and an untrusted TLS-inspecting proxy each show up as exactly that, for the node pool concerned.
+
+Probes also check two things that need credentials:
+- that every release image resolves by digest from the pool (REG-03);
+- that the backup credentials can write, read and delete a test blob (BAK-02).
+
+Those credentials reach the probe through a Secret in the temporary namespace, which is deleted with it. They never appear in any output.
 
 The probe image ([`deploy/probe/Dockerfile`](deploy/probe/Dockerfile), `make probe-image`) is a static binary of about 1.8 MB on distroless. It runs as a non-root user with a read-only root filesystem and every capability dropped. It needs no Kubernetes API access. If the nodes can't pull it, Preflight names the image to mirror and still finishes every workstation check.
 

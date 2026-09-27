@@ -112,6 +112,11 @@ type Endpoint struct {
 	Purpose         string   `json:"purpose"`
 	Checks          []string `json:"checks"`
 	SGXOnly         bool     `json:"sgxOnly,omitempty"`
+	HTTPPath        string   `json:"httpPath,omitempty"`
+	// InterceptSensitive endpoints are checked for TLS interception (NET-03).
+	InterceptSensitive bool `json:"interceptSensitive,omitempty"`
+	// TCPOnly endpoints get no TLS or HTTP stage (syslog).
+	TCPOnly bool `json:"tcpOnly,omitempty"`
 }
 
 // Check is one catalog entry.

@@ -78,33 +78,50 @@ docLinks:
 # Endpoints the network checks test, from every node pool. TCP 443 unless a
 # port is given. fromSetting endpoints are only tested when that setting is set.
 endpoints:
+  # httpPath: requested over verified TLS; any HTTP response proves the
+  #   endpoint answers (D-6). Paths must be confirmed against the live
+  #   services before release.
+  # interceptSensitive: NET-03 checks the certificate chain on this path.
+  # tcpOnly: no TLS or HTTP stage (syslog).
   - fqdn: cr.download.fortanix.com
     fromSetting: registry.url
     purpose: Armor images and Helm charts
     checks: [NET-02, REG-01, REG-02, REG-03]
+    httpPath: /v2/
+    interceptSensitive: true
   - fqdn: pccs.fortanix.com
     purpose: SGX DCAP collateral (Fortanix PCCS)
     checks: [CC-03, NET-02]
     sgxOnly: true
+    httpPath: /
+    interceptSensitive: true
   - fqdn: global.acccache.azure.net
     purpose: SGX DCAP collateral (Azure PCCS)
     checks: [CC-03, NET-02]
     sgxOnly: true
+    httpPath: /
+    interceptSensitive: true
   - fqdn: api.trustedservices.intel.com
     purpose: Remote attestation (Intel Trust Authority)
     checks: [CC-04, NET-02]
     sgxOnly: true
+    httpPath: /
+    interceptSensitive: true
   - fromSetting: attestation.azureAttestationHost
     purpose: Remote attestation (Azure Attestation)
     checks: [CC-04, NET-02]
     sgxOnly: true
+    httpPath: /.well-known/openid-configuration
+    interceptSensitive: true
   - fromSetting: storage.accountFqdn
     purpose: Cassandra backups
     checks: [BAK-02, NET-02]
+    httpPath: /
   - fromSetting: syslog.host
     portFromSetting: syslog.port
     purpose: Audit log export
     checks: [NET-06]
+    tcpOnly: true
 
 checks:
   # --- workstation -------------------------------------------------------

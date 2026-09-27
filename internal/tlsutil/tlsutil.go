@@ -3,8 +3,10 @@
 package tlsutil
 
 import (
+	"context"
 	"crypto/tls"
 	"crypto/x509"
+	"net"
 	"net/http"
 	"net/url"
 	"time"
@@ -20,6 +22,8 @@ type Options struct {
 	// Timeout bounds each request; zero means no client-side limit beyond
 	// the request context.
 	Timeout time.Duration
+	// DialContext replaces the default dialer (tests).
+	DialContext func(ctx context.Context, network, addr string) (net.Conn, error)
 }
 
 // Config returns the TLS configuration for every outbound connection.
@@ -41,6 +45,7 @@ func NewHTTPClient(o Options) *http.Client {
 		ResponseHeaderTimeout: 10 * time.Second,
 		MaxIdleConnsPerHost:   4,
 		IdleConnTimeout:       30 * time.Second,
+		DialContext:           o.DialContext,
 	}
 	return &http.Client{
 		Transport: tr,

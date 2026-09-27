@@ -30,6 +30,12 @@ func TestResolveEndpoints(t *testing.T) {
 	if len(missing) != 1 || missing[0] != "attestation.azureAttestationHost" {
 		t.Fatalf("missing %v", missing)
 	}
+	withPort, _ := settings.Parse([]byte("armorVersion: 1.0.404\nregistry: {mode: mirror, url: \"mirror.corp.example:5000\"}\n"))
+	for _, ep := range c.ResolveEndpoints(withPort) {
+		if ep.HasCheck("REG-01") && (ep.Host != "mirror.corp.example" || ep.Port != 5000) {
+			t.Fatalf("registry host:port not split: %+v", ep)
+		}
+	}
 	if c.PurposeOf(st, "pccs.fortanix.com") != "SGX DCAP collateral (Fortanix PCCS)" {
 		t.Fatal("PurposeOf")
 	}

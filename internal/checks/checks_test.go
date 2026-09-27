@@ -62,9 +62,13 @@ func TestCompliantClusterPasses(t *testing.T) {
 	f := newFixture(t)
 	rep := runChecks(t, clusterEnv(f))
 	impl := Registry()
+	cat, _ := catalog.Load()
 	for _, r := range rep.Results {
 		if impl[r.ID] == nil || r.SkippedReason != nil && *r.SkippedReason == "not implemented in this build" {
 			continue
+		}
+		if def := cat.Check(r.ID); def.RunsIn == catalog.RunsInProbe {
+			continue // covered with real probe results in probe_test.go
 		}
 		switch {
 		case r.ID == "K8S-12" && r.Status == model.StatusInfo:
@@ -126,6 +130,9 @@ func TestEachCheckFailsOnItsFixture(t *testing.T) {
 	}
 	cat, _ := catalog.Load()
 	for id := range Registry() {
+		if cat.Check(id).RunsIn == catalog.RunsInProbe {
+			continue // probe_test.go
+		}
 		if _, ok := cases[id]; !ok && id != "K8S-12" {
 			t.Errorf("no failing fixture for %s", id)
 		}

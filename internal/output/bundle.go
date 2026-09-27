@@ -41,6 +41,7 @@ var unregisteredSecret = regexp.MustCompile(`-----BEGIN [A-Z ]*PRIVATE KEY-----|
 // result, versions.json and a manifest of SHA-256 hashes. It contains no
 // logs, secret values or workload data.
 func BuildBundle(rec *Record, r *redact.Redactor, now time.Time) ([]BundleEntry, error) {
+	rec.Redact(r)
 	result, err := MarshalRecord(rec)
 	if err != nil {
 		return nil, err

@@ -5,7 +5,9 @@ package redact
 import (
 	"bytes"
 	"encoding/base64"
+	"encoding/json"
 	"errors"
+	"html"
 	"io"
 	"net/url"
 	"sort"
@@ -50,14 +52,23 @@ func (r *Redactor) Add(secrets ...string) {
 	sort.Slice(r.forms, func(i, j int) bool { return len(r.forms[i]) > len(r.forms[j]) })
 }
 
-// Forms lists the encodings of a secret that are masked.
+// htmlTemplateEscaper mirrors html/template's escaping of text.
+var htmlTemplateEscaper = strings.NewReplacer(`&`, "&amp;", `<`, "&lt;", `>`, "&gt;", `"`, "&#34;", `'`, "&#39;", "\x00", "\uFFFD")
+
+// Forms lists the encodings of a secret that are masked: as written,
+// JSON- and HTML-escaped (how it appears in result.json and report.html),
+// base64 and URL-encoded.
 func Forms(secret string) []string {
 	if secret == "" {
 		return nil
 	}
 	b := []byte(secret)
+	jsonForm, _ := json.Marshal(secret) // Go escapes " \ < > & and controls
 	forms := []string{
 		secret,
+		strings.Trim(string(jsonForm), `"`),
+		html.EscapeString(secret),
+		htmlTemplateEscaper.Replace(secret),
 		base64.StdEncoding.EncodeToString(b),
 		base64.RawStdEncoding.EncodeToString(b),
 		base64.URLEncoding.EncodeToString(b),
@@ -170,3 +181,30 @@ func (w *Writer) Close() error { return w.Flush() }
 // ErrUnredacted reports a secret-looking value that redaction cannot mask
 // because it was never registered (for example, a private key).
 var ErrUnredacted = errors.New("output contains an unregistered secret")
+
+// URL returns s with any user:password removed, for URLs that are printed
+// (a proxy from the environment, a kubeconfig server). Strings that do not
+// parse as URLs with a host are returned unchanged.
+func URL(s string) string {
+	if !strings.Contains(s, "://") {
+		// Proxy variables are often set without a scheme (user:pass@host:port).
+		if at := strings.LastIndex(s, "@"); at >= 0 && !strings.ContainsAny(s[:at], "/ ") {
+			return s[at+1:]
+		}
+		return s
+	}
+	u, err := url.Parse(s)
+	if err != nil {
+		// Unparseable, but may still carry credentials: drop everything
+		// between the scheme and the last @ before the path.
+		if i, at := strings.Index(s, "://"), strings.LastIndex(s, "@"); at > i {
+			return s[:i+3] + s[at+1:]
+		}
+		return s
+	}
+	if u.User == nil {
+		return s
+	}
+	u.User = nil
+	return u.String()
+}

@@ -29,11 +29,12 @@ func leakyRegistry() engine.Registry {
 	cat, _ := catalog.Load()
 	reg := fakeRegistry(map[string]model.Status{"REG-01": model.StatusFail, "NET-02": model.StatusFail})()
 	auth := base64.StdEncoding.EncodeToString([]byte("u:" + canaryRegistryPassword))
-	reg["REG-01"] = func(context.Context, *engine.Env, *catalog.Check) []model.Result {
+	reg["REG-01"] = func(_ context.Context, env *engine.Env, _ *catalog.Check) []model.Result {
+		pw := env.Settings.ResolveSecrets(env.LookupEnv).RegistryPassword
 		return []model.Result{{Status: model.StatusFail, Scope: model.ClusterScope(),
-			Remediation: "Password " + canaryRegistryPassword + " was rejected",
+			Remediation: "Password " + pw + " was rejected",
 			Evidence: []model.Evidence{
-				{Stage: "login", Target: "https://u:" + canaryRegistryPassword + "@cr.download.fortanix.com", Detail: "401 for " + canaryRegistryPassword},
+				{Stage: "login", Target: "https://u:" + pw + "@cr.download.fortanix.com", Detail: "401 for " + pw},
 				{Stage: "auth", Detail: `{"auth":"` + auth + `"}`},
 			}}}
 	}

@@ -139,3 +139,29 @@ func ReadRecord(dir string) (*Record, error) {
 	}
 	return &r, nil
 }
+
+// Redact masks secrets in every free-text field of the record, before it is
+// rendered. Rendering escapes characters (JSON, HTML), so masking only the
+// rendered bytes could miss a secret containing " < > & or a backslash.
+func (r *Record) Redact(red interface{ String(string) string }) {
+	for i := range r.Results {
+		res := &r.Results[i]
+		res.Title = red.String(res.Title)
+		res.Remediation = red.String(res.Remediation)
+		if res.SkippedReason != nil {
+			v := red.String(*res.SkippedReason)
+			res.SkippedReason = &v
+		}
+		for j := range res.Evidence {
+			res.Evidence[j].Target = red.String(res.Evidence[j].Target)
+			res.Evidence[j].Detail = red.String(res.Evidence[j].Detail)
+		}
+	}
+	for i := range r.InternalErrors {
+		r.InternalErrors[i] = red.String(r.InternalErrors[i])
+	}
+	for i := range r.Probes {
+		r.Probes[i].Error = red.String(r.Probes[i].Error)
+	}
+	r.Target.KubeContext = red.String(r.Target.KubeContext)
+}

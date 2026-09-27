@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	gopath "path"
 	"strings"
 	"sync"
 )
@@ -84,6 +85,13 @@ func (g *Guard) allowed(method, path string) bool {
 	switch method {
 	case http.MethodGet, http.MethodHead, http.MethodOptions:
 		return true
+	}
+	// Refuse any write whose path is not already clean, so a path such as
+	// /api/v1/namespaces/armor-preflight-x/../default/pods cannot pass the
+	// prefix checks below and be normalised by the server into another
+	// namespace.
+	if path == "" || path[0] != '/' || gopath.Clean(path) != strings.TrimSuffix(path, "/") || strings.Contains(path, "%") {
+		return false
 	}
 	path = strings.TrimSuffix(path, "/")
 	if method == http.MethodPost && nonPersisted[path] {

@@ -123,8 +123,10 @@ func firstLine(s string) string {
 // sequence in it could otherwise rewrite what the operator sees.
 type controlStripper struct{ w io.Writer }
 
-func (c *controlStripper) Write(p []byte) (int, error) {
-	clean := strings.Map(func(r rune) rune {
+// StripControl replaces terminal control characters (except newline and
+// tab) with '?'.
+func StripControl(s string) string {
+	return strings.Map(func(r rune) rune {
 		switch {
 		case r == '\n' || r == '\t':
 			return r
@@ -132,8 +134,11 @@ func (c *controlStripper) Write(p []byte) (int, error) {
 			return '?'
 		}
 		return r
-	}, string(p))
-	if _, err := io.WriteString(c.w, clean); err != nil {
+	}, s)
+}
+
+func (c *controlStripper) Write(p []byte) (int, error) {
+	if _, err := io.WriteString(c.w, StripControl(string(p))); err != nil {
 		return 0, err
 	}
 	return len(p), nil

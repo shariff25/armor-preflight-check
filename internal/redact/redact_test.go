@@ -83,3 +83,26 @@ func TestWriterMasksAcrossWrites(t *testing.T) {
 		t.Fatalf("got %q", out.String())
 	}
 }
+
+func TestMasksEscapedForms(t *testing.T) {
+	secret := `a&b<c>"d'e\f`
+	r := New(secret)
+	for _, leaked := range []string{`a\u0026b\u003cc\u003e\"d'e\\f`, "a&amp;b&lt;c&gt;&#34;d&#39;e\\f"} {
+		if got := r.String("x" + leaked + "y"); got != "x"+Mask+"y" {
+			t.Errorf("%q -> %q", leaked, got)
+		}
+	}
+}
+
+func TestURL(t *testing.T) {
+	for in, want := range map[string]string{
+		"http://user:pass@proxy.example:3128": "http://proxy.example:3128",
+		"https://admin@api.example:443/path":  "https://api.example:443/path",
+		"http://proxy.example:3128":           "http://proxy.example:3128",
+		"not a url":                           "not a url",
+	} {
+		if got := URL(in); got != want {
+			t.Errorf("%s -> %s", in, got)
+		}
+	}
+}

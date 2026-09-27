@@ -13,6 +13,7 @@ import (
 // WriteFiles writes result.json, report.html and firewall-request.csv to
 // dir, masking every registered secret, and returns the paths written.
 func WriteFiles(dir string, rec *Record, fw FirewallInputs, r *redact.Redactor) ([]string, error) {
+	rec.Redact(r)
 	// Reports describe the customer's infrastructure: owner and group only.
 	if err := os.MkdirAll(dir, 0o750); err != nil {
 		return nil, fmt.Errorf("create output directory: %w", err)

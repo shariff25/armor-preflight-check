@@ -10,13 +10,15 @@ import (
 	"github.com/shariff25/agent-goverance-OS/armor-preflight/internal/catalog"
 	"github.com/shariff25/agent-goverance-OS/armor-preflight/internal/engine"
 	"github.com/shariff25/agent-goverance-OS/armor-preflight/internal/model"
+	"github.com/shariff25/agent-goverance-OS/armor-preflight/internal/redact"
 )
 
 // net04: proxy settings are consistent and NO_PROXY covers the cluster
 // CIDRs and the Armor domains.
 func net04(ctx context.Context, env *engine.Env, _ *catalog.Check) []model.Result {
 	st := env.Settings
-	envProxy := firstEnv(env, "HTTPS_PROXY", "https_proxy")
+	// The environment's proxy may embed credentials; never print them.
+	envProxy := redact.URL(firstEnv(env, "HTTPS_PROXY", "https_proxy"))
 	envNoProxy := firstEnv(env, "NO_PROXY", "no_proxy")
 	proxy, noProxy, source := st.Proxy.HTTPSProxy, st.Proxy.NoProxy, "settings file"
 	if proxy == "" {

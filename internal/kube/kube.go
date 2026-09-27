@@ -10,6 +10,8 @@ import (
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
+
+	"github.com/shariff25/agent-goverance-OS/armor-preflight/internal/redact"
 )
 
 // Clients are the API clients checks use.
@@ -81,5 +83,5 @@ func FromConfig(cfg *rest.Config, contextName string, o Options) (*Clients, erro
 	if err != nil {
 		return nil, err
 	}
-	return &Clients{Core: core, Dynamic: dyn, Context: contextName, Server: cfg.Host, Guard: guard}, nil
+	return &Clients{Core: core, Dynamic: dyn, Context: contextName, Server: redact.URL(cfg.Host), Guard: guard}, nil
 }

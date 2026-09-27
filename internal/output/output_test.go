@@ -439,3 +439,11 @@ func TestOutputPermissions(t *testing.T) {
 		}
 	}
 }
+
+func TestStripControl(t *testing.T) {
+	// U+009B is the C1 control sequence introducer; a lone 0x9b byte is not
+	// valid UTF-8 and comes out as the harmless U+FFFD.
+	if got := StripControl("a\x1b[31mb\tc\nd\u009be\x9bf"); got != "a?[31mb\tc\nd?e\ufffdf" {
+		t.Fatalf("%q", got)
+	}
+}

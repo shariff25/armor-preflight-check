@@ -7,6 +7,7 @@ import (
 	"github.com/shariff25/agent-goverance-OS/armor-preflight/internal/catalog"
 	"github.com/shariff25/agent-goverance-OS/armor-preflight/internal/engine"
 	"github.com/shariff25/agent-goverance-OS/armor-preflight/internal/model"
+	"github.com/shariff25/agent-goverance-OS/armor-preflight/internal/redact"
 )
 
 // requiredTools are the workstation tools the install needs, with the
@@ -45,20 +46,21 @@ func ws01(ctx context.Context, env *engine.Env, _ *catalog.Check) []model.Result
 		evidence = append(evidence, ev("context", "", false, "cannot use the kubeconfig: %v", env.KubeErr))
 		return one(verdict(model.ClusterScope(), evidence...))
 	}
+	server := redact.URL(env.Kube.Server)
 	want := env.Settings.KubeContext
 	switch {
 	case want != "" && want != env.Kube.Context:
-		evidence = append(evidence, ev("context", env.Kube.Context, false, "current context is %q (%s) but the settings file expects %q; select it with -c", env.Kube.Context, env.Kube.Server, want))
+		evidence = append(evidence, ev("context", env.Kube.Context, false, "current context is %q (%s) but the settings file expects %q; select it with -c", env.Kube.Context, server, want))
 	case want != "":
-		evidence = append(evidence, ev("context", env.Kube.Context, true, "matches the settings file (%s)", env.Kube.Server))
+		evidence = append(evidence, ev("context", env.Kube.Context, true, "matches the settings file (%s)", server))
 	default:
-		evidence = append(evidence, ev("context", env.Kube.Context, true, "using context %q (%s); set kubeContext in the settings file to enforce it", env.Kube.Context, env.Kube.Server))
+		evidence = append(evidence, ev("context", env.Kube.Context, true, "using context %q (%s); set kubeContext in the settings file to enforce it", env.Kube.Context, server))
 	}
 	v, err := env.Kube.Core.Discovery().ServerVersion()
 	if err != nil {
-		evidence = append(evidence, ev("api", env.Kube.Server, false, "API server did not answer: %v", err))
+		evidence = append(evidence, ev("api", server, false, "API server did not answer: %v", err))
 	} else {
-		evidence = append(evidence, ev("api", env.Kube.Server, true, "API server answered (Kubernetes %s)", v.GitVersion))
+		evidence = append(evidence, ev("api", server, true, "API server answered (Kubernetes %s)", v.GitVersion))
 	}
 	return one(verdict(model.ClusterScope(), evidence...))
 }

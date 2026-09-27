@@ -488,3 +488,22 @@ func TestClusterWideListsAreShared(t *testing.T) {
 		t.Fatalf("list calls: %v", counts)
 	}
 }
+
+// Pen test: credentials embedded in the workstation's proxy URL or the
+// kubeconfig server URL must not reach the report.
+func TestPentestURLCredentialsNotReported(t *testing.T) {
+	f := newFixture(t)
+	f.settingsYAML = regexp.MustCompile(`(?m)^proxy: .*\n`).ReplaceAllString(f.settingsYAML, "")
+	f.envVars["HTTPS_PROXY"] = "http://corp-user:Pr0xyPassw0rd@proxy.corp.example:3128"
+	env := f.env(engine.ModeWorkstation)
+	env.Kube.Server = "https://admin:K8sPassw0rd@aks-armor-prod.hcp.eastus.azmk8s.io:443"
+	rep := runChecks(t, env)
+	for _, r := range rep.Results {
+		text := evidenceText([]model.Result{r}) + r.Remediation
+		for _, secret := range []string{"Pr0xyPassw0rd", "K8sPassw0rd", "corp-user:", "admin:"} {
+			if strings.Contains(text, secret) {
+				t.Errorf("%s leaks %q: %s", r.ID, secret, text)
+			}
+		}
+	}
+}

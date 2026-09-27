@@ -113,6 +113,12 @@ func TestRunNamespaceMode(t *testing.T) {
 		"PATCH /api/v1/nodes/n1",
 		"POST /api/v1/persistentvolumes",
 		"POST /apis/apps/v1/namespaces/default/deployments",
+		// Pen test: traversal out of the run namespace.
+		"POST /api/v1/namespaces/armor-preflight-20260926-1512-7f3a/../default/pods",
+		"DELETE /api/v1/namespaces/armor-preflight-20260926-1512-7f3a/./../kube-system",
+		"POST /apis/apps/v1/namespaces/armor-preflight-20260926-1512-7f3a//../../namespaces/default/deployments",
+		"DELETE /api/v1/persistentvolumes/../namespaces/default",
+		"POST /api/v1/namespaces/armor-preflight-20260926-1512-7f3a%2F..%2Fdefault/pods",
 	}
 	for _, s := range allowed {
 		m, p, _ := strings.Cut(s, " ")

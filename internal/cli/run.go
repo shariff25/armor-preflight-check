@@ -4,8 +4,10 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"net"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
@@ -16,10 +18,12 @@ import (
 	"github.com/shariff25/agent-goverance-OS/armor-preflight/internal/checks"
 	"github.com/shariff25/agent-goverance-OS/armor-preflight/internal/engine"
 	"github.com/shariff25/agent-goverance-OS/armor-preflight/internal/exitcode"
+	"github.com/shariff25/agent-goverance-OS/armor-preflight/internal/kube"
 	"github.com/shariff25/agent-goverance-OS/armor-preflight/internal/model"
 	"github.com/shariff25/agent-goverance-OS/armor-preflight/internal/output"
 	"github.com/shariff25/agent-goverance-OS/armor-preflight/internal/redact"
 	"github.com/shariff25/agent-goverance-OS/armor-preflight/internal/settings"
+	"github.com/shariff25/agent-goverance-OS/armor-preflight/internal/tlsutil"
 )
 
 // Hooks tests replace.
@@ -27,6 +31,7 @@ var (
 	registry                     = checks.Registry
 	lookupEnv settings.EnvLookup = os.LookupEnv
 	now                          = time.Now
+	loadKube                     = kube.Load
 )
 
 type runOptions struct {
@@ -102,7 +107,23 @@ func (o *runOptions) run(ctx context.Context, stdout io.Writer) (err error) {
 		Settings:     st,
 		SettingsFile: o.settingsFile,
 		LookupEnv:    lookupEnv,
+		Local:        execTools{},
+		DNS:          net.DefaultResolver,
+		HTTP:         tlsutil.NewHTTPClient(tlsutil.Options{}),
+		Now:          now,
 	}
+	// Both modes use the read-only guard for now; cluster mode's probe
+	// orchestration (M4) widens it to the run namespace only.
+	env.Kube, env.KubeErr = loadKube(kube.Options{Kubeconfig: o.kubeconfig, Context: o.kubeContext, Mode: kube.ReadOnly})
+	target := output.Target{ArmorVersion: st.ArmorVersion, KubeContext: o.kubeContext}
+	if env.Kube != nil {
+		target.KubeContext = env.Kube.Context
+		if v, err := env.Kube.Core.Discovery().ServerVersion(); err == nil {
+			target.KubernetesVersion = strings.TrimPrefix(v.GitVersion, "v")
+		}
+		env.Topology = checks.Topology(ctx, env)
+	}
+
 	rep, err := engine.Run(ctx, env, registry(), engine.Options{Timeout: o.checkTimeout})
 	if err != nil {
 		return exitcode.ToolFailure(err)
@@ -110,12 +131,18 @@ func (o *runOptions) run(ctx context.Context, stdout io.Writer) (err error) {
 
 	rec := output.NewRecord(
 		output.Tool{Version: buildinfo.Version, Commit: buildinfo.Commit, CatalogVersion: cat.CatalogVersion},
-		output.Target{ArmorVersion: st.ArmorVersion, KubeContext: o.kubeContext},
+		target,
 		output.RunInfo{ID: runID, Mode: string(o.mode), StartedAt: started.UTC()},
 		rep.Results, rep.Unimplemented, rep.InternalErrors)
 	rec.Duration(now().Sub(started))
+	rec.RBAC = append(rec.RBAC, kube.WorkstationPermissions...)
 
 	files, werr := output.WriteFiles(o.outputDir, rec, output.FirewallInputs{Catalog: cat, Settings: st, Topology: env.Topology}, red)
+	if werr == nil {
+		var extra []string
+		extra, werr = output.WriteArtifacts(o.outputDir, env.Artifacts(), red)
+		files = append(files, extra...)
+	}
 	output.WriteTerminal(out, rec, files)
 	if werr != nil {
 		return exitcode.ToolFailure(werr)

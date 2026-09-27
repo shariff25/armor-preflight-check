@@ -5,12 +5,14 @@ package engine
 import (
 	"context"
 	"fmt"
+	"net/http"
 	"runtime/debug"
 	"strings"
 	"sync"
 	"time"
 
 	"github.com/shariff25/agent-goverance-OS/armor-preflight/internal/catalog"
+	"github.com/shariff25/agent-goverance-OS/armor-preflight/internal/kube"
 	"github.com/shariff25/agent-goverance-OS/armor-preflight/internal/model"
 	"github.com/shariff25/agent-goverance-OS/armor-preflight/internal/settings"
 )
@@ -53,7 +55,19 @@ func (t Topology) PoolOf(node string) string {
 	return ""
 }
 
-// Env is everything a check can read. Checks must treat it as read-only.
+// LocalTools runs commands on the workstation.
+type LocalTools interface {
+	LookPath(name string) (string, error)
+	Output(ctx context.Context, name string, args ...string) ([]byte, error)
+}
+
+// Resolver resolves names from the workstation.
+type Resolver interface {
+	LookupHost(ctx context.Context, host string) ([]string, error)
+}
+
+// Env is everything a check can read. Checks must treat it as read-only,
+// apart from AddArtifact.
 type Env struct {
 	Mode         Mode
 	Catalog      *catalog.Catalog
@@ -64,6 +78,40 @@ type Env struct {
 	// ProbeUnavailable, when set, is why probe-based checks cannot run (for
 	// example, the probe image could not be pulled).
 	ProbeUnavailable string
+
+	// Kube is nil when the kubeconfig could not be loaded; KubeErr says why.
+	Kube    *kube.Clients
+	KubeErr error
+	Local   LocalTools
+	HTTP    *http.Client
+	DNS     Resolver
+	Now     func() time.Time
+
+	artifactsMu sync.Mutex
+	artifacts   map[string][]byte
+}
+
+// AddArtifact records an extra output file (for example the imageOverrides
+// REG-04 generates). The CLI writes artifacts to the output directory,
+// redacted like every other output.
+func (e *Env) AddArtifact(name string, data []byte) {
+	e.artifactsMu.Lock()
+	defer e.artifactsMu.Unlock()
+	if e.artifacts == nil {
+		e.artifacts = map[string][]byte{}
+	}
+	e.artifacts[name] = data
+}
+
+// Artifacts returns the recorded extra outputs.
+func (e *Env) Artifacts() map[string][]byte {
+	e.artifactsMu.Lock()
+	defer e.artifactsMu.Unlock()
+	out := make(map[string][]byte, len(e.artifacts))
+	for k, v := range e.artifacts {
+		out[k] = v
+	}
+	return out
 }
 
 // Params returns the catalog parameters.

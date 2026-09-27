@@ -35,12 +35,23 @@ parameters:
   minKubernetes: "1.34.8"
   nfdMinVersion: "0.15.0"
   certManagerVersions: TBD
+  # Node size is compared on reported capacity: Standard_D4d_v5 is 4 vCPU and
+  # 16 GiB; DC8s_v3 is 8 vCPU and 64 GiB. Kubelet reports a little less
+  # memory than the VM size, hence memoryTolerance.
   systemPool:
     minNodes: 3
     minSku: Standard_D4d_v5
+    minCpu: 4
+    minMemoryGiB: 16
   sgxPool:
     minNodes: 3
     minSku: DC8_v3            # as written in the brief; see DECISIONS.md
+    minCpu: 8
+    minMemoryGiB: 64
+    skuPattern: "(?i)^Standard_DC[0-9]+d?s_v3$"
+  memoryTolerance: 0.9
+  systemModeLabel: kubernetes.azure.com/mode
+  instanceTypeLabel: node.kubernetes.io/instance-type
   validatedOs: "Ubuntu 24"
   clockSkewSeconds: 5
   pullSecretExpiryWarnDays: 14

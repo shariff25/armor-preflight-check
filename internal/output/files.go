@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
+	"strings"
 
 	"github.com/shariff25/agent-goverance-OS/armor-preflight/internal/redact"
 )
@@ -63,4 +65,26 @@ func writeAtomic(path string, data []byte) error {
 		return fmt.Errorf("write %s: %w", path, err)
 	}
 	return nil
+}
+
+// WriteArtifacts writes extra files checks produced (for example
+// image-overrides.yaml), masking secrets, and returns the paths written.
+func WriteArtifacts(dir string, artifacts map[string][]byte, r *redact.Redactor) ([]string, error) {
+	names := make([]string, 0, len(artifacts))
+	for name := range artifacts {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	var written []string
+	for _, name := range names {
+		if filepath.Base(name) != name || strings.HasPrefix(name, ".") {
+			return written, fmt.Errorf("refusing artifact name %q", name)
+		}
+		p := filepath.Join(dir, name)
+		if err := writeAtomic(p, r.Bytes(artifacts[name])); err != nil {
+			return written, err
+		}
+		written = append(written, p)
+	}
+	return written, nil
 }

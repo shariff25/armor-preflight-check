@@ -1,0 +1,48 @@
+# Least-privilege permissions for `armor-preflight run workstation`.
+#
+# Everything here is read-only. SelfSubjectAccessReview needs no grant: every
+# authenticated user may create one, and the API server does not store it
+# (D-1). scripts/audit-lab.sh runs Preflight with exactly these permissions
+# against a real API server and checks the audit log.
+#
+# Bind the ClusterRole to the identity that runs Preflight, and create the
+# Role in each namespace listed in armorNamespaces (REG-05). K8S-09 checks
+# the permissions of whoever runs Preflight; run it with the installer's
+# credentials to check the installer.
+#
+# Cluster mode (probe pods) needs additional write permissions, limited to
+# Preflight's own temporary namespace; they ship with milestone M4.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: armor-preflight-workstation
+  labels: {app.kubernetes.io/name: armor-preflight}
+rules:
+  - nonResourceURLs: ["/version"]
+    verbs: [get]
+  - apiGroups: [""]
+    resources: [nodes, pods, namespaces]
+    verbs: [get, list]
+  - apiGroups: [networking.k8s.io]
+    resources: [ingressclasses, servicecidrs]
+    verbs: [list]
+  - apiGroups: [apiextensions.k8s.io]
+    resources: [customresourcedefinitions]
+    verbs: [list]
+  - apiGroups: [cert-manager.io]
+    resources: [clusterissuers]
+    verbs: [list]
+---
+# REG-05 lists image pull secrets in each Armor namespace. Create this Role
+# (and a RoleBinding) in every namespace in armorNamespaces. Preflight only
+# reads the registry host names inside the secret and never logs credentials.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: armor-preflight-pull-secrets
+  namespace: armor
+  labels: {app.kubernetes.io/name: armor-preflight}
+rules:
+  - apiGroups: [""]
+    resources: [secrets]
+    verbs: [list]

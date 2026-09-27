@@ -67,10 +67,16 @@ type VersionMapping struct {
 	Preflight     string   `json:"preflight"`
 }
 
-// Pool is a node pool size requirement.
+// Pool is a node pool size requirement. Size is compared on each node's
+// reported CPU and memory capacity, so any SKU at least as large passes.
 type Pool struct {
-	MinNodes int    `json:"minNodes"`
-	MinSKU   string `json:"minSku"`
+	MinNodes     int     `json:"minNodes"`
+	MinSKU       string  `json:"minSku"`
+	MinCPU       int     `json:"minCpu"`
+	MinMemoryGiB float64 `json:"minMemoryGiB"`
+	// SKUPattern, when set, is a regular expression the node's instance
+	// type must match (the SGX pool must be an SGX-capable family).
+	SKUPattern string `json:"skuPattern,omitempty"`
 }
 
 // Parameters are the thresholds and names checks use.
@@ -81,6 +87,9 @@ type Parameters struct {
 	SystemPool                 Pool     `json:"systemPool"`
 	SGXPool                    Pool     `json:"sgxPool"`
 	ValidatedOS                string   `json:"validatedOs"`
+	MemoryTolerance            float64  `json:"memoryTolerance"`
+	SystemModeLabel            string   `json:"systemModeLabel"`
+	InstanceTypeLabel          string   `json:"instanceTypeLabel"`
 	ClockSkewSeconds           int      `json:"clockSkewSeconds"`
 	PullSecretExpiryWarnDays   int      `json:"pullSecretExpiryWarnDays"`
 	LoadBalancerTimeoutSeconds int      `json:"loadBalancerTimeoutSeconds"`

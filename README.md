@@ -2,7 +2,7 @@
 
 `armor-preflight` checks whether a customer environment is ready for a Fortanix Armor on-prem install, before anyone starts the install. It checks every prerequisite from where Armor will actually run and tells each customer team what it needs to fix.
 
-> **Status: milestone M2.** The check catalog (all 35 Phase 1 checks), the engine, settings loading, every output and the support bundle are in place. No check logic is implemented yet, so `run` reports every check as not implemented, writes its outputs with verdict `INCOMPLETE` and exits 3. `cleanup` exits 3 ("not implemented yet"). See [PLAN.md](PLAN.md) for the build order.
+> **Status: milestone M3.** The catalog, engine, outputs and support bundle are in place, and the 23 checks that run from the workstation are implemented. The 12 cluster-mode and probe checks (K8S-10, K8S-11, CC-03 to CC-05, NET-01 to NET-03, NET-06, NET-07, REG-03, BAK-02) arrive in M4 to M6. Until then, `run` lists them as not implemented, writes its outputs with verdict `INCOMPLETE` and exits 3. `cleanup` exits 3 ("not implemented yet"). See [PLAN.md](PLAN.md) for the build order.
 
 ## Commands
 
@@ -61,6 +61,17 @@ Secrets the settings file names are masked in everything Preflight prints or wri
 | 1 | READY WITH WARNINGS |
 | 2 | NOT READY (at least one blocker failed) |
 | 3 | Preflight itself failed to run |
+
+## Permissions
+
+`run workstation` only reads from the cluster. [`deploy/rbac/workstation.yaml`](deploy/rbac/workstation.yaml) is the least-privilege role it needs:
+- A read-only ClusterRole.
+- A Role for listing image pull secrets in each Armor namespace (REG-05).
+- SelfSubjectAccessReviews, which every user may create and the API server doesn't store.
+
+K8S-09 checks the permissions of whoever runs Preflight. Run it with the installer's credentials to check the installer.
+
+`scripts/audit-lab.sh` proves this. It starts a real kube-apiserver with audit logging, seeds an AKS-like cluster, and runs Preflight as an identity bound only to that role. It then fails if the audit log shows any write, or any forbidden request. CI runs it on every change.
 
 ## Building
 

@@ -79,3 +79,36 @@ The user chose not to gate the build on D-1 to D-3, so the plan's defaults apply
   - With no answer (a non-interactive run without `--yes`), it exits 3, so a script can't assume the bundle was written.
 - **File writes are atomic** (a temp file, then rename), so an interrupted run never leaves a half-written report.
 - **An incomplete run still writes its outputs.** A run that exits 3 because of unimplemented checks or internal errors still writes all three files with verdict `INCOMPLETE`. A refused run (settings rejected, or the Armor version isn't covered) writes nothing.
+
+## M3
+
+- **Kubernetes access.** Preflight uses `client-go` for core resources and the dynamic client for CRDs and ClusterIssuers, so it needs no apiextensions client dependency. Every request passes through `kube.Guard`, an HTTP round-tripper that refuses writes before they leave the process.
+  - Workstation mode allows only GET, plus POST to SelfSubjectAccessReview and SelfSubjectRulesReview (D-1).
+  - `RunNamespace` mode (used from M4) also allows writes to the run namespace and to objects inside it.
+- **Proof of zero writes.** Three layers check it:
+  - Unit tests on the guard.
+  - A fake-clientset test showing no write actions in workstation mode.
+  - `scripts/audit-lab.sh`, a CI job that runs the real binary against a real kube-apiserver 1.34 (from envtest) with audit logging on. The Preflight identity is bound only to `deploy/rbac/workstation.yaml`. The script fails on any write in the audit log, or any forbidden request.
+- **A kubeconfig or API problem fails WS-01, not the run.** If the kubeconfig can't be loaded or the API server doesn't answer, WS-01 fails with the reason and every Kubernetes check is skipped, naming WS-01. The run doesn't exit 3 for this, because it's the customer's problem to fix and it belongs in the report.
+- **Node size is compared on reported capacity,** not by looking up SKU names. A node passes when its vCPU count is at least the minimum and its memory is at least `memoryTolerance` (0.9) times the minimum; kubelet reports slightly less memory than the VM size. The minimums are:
+  - System pool (Standard_D4d_v5): 4 vCPU, 16 GiB.
+  - SGX pool (DC8s_v3): 8 vCPU, 64 GiB.
+  - SGX nodes must also match the DCsv3/DCdsv3 family (`Standard_DC<n>[d]s_v3`), because a non-SGX VM of the same size won't do.
+- **How pools are identified.** Pools come from `kubernetes.azure.com/agentpool`, falling back to the instance type.
+  - A pool is an SGX pool if any node in it has the SGX size family, advertises `sgx.intel.com/*` resources, or carries the NFD SGX label.
+  - The system pool is identified by `kubernetes.azure.com/mode=system`. On clusters without that label, every non-SGX pool counts as a system pool.
+- **Unsupported profile (D-8).** When no node has AKS labels or an `azure://` provider ID, K8S-02 and K8S-03 add "unsupported profile" evidence and report warn instead of pass.
+- **K8S-07 (ingress controller).** Well-known controllers are matched by their pod labels: ingress-nginx, Application Gateway, AKS app routing and Traefik. For any other controller, a Ready pod with "ingress" in its app label counts.
+- **K8S-08 (cert-manager).** The version comes from the controller image tag. While `certManagerVersions` is TBD, K8S-08 reports warn ("version unverified") rather than pass.
+- **K8S-09 checks whoever runs Preflight.** SelfSubjectAccessReview can only check the caller. To check the installer, run Preflight with the installer's credentials; the evidence says so. `--as` impersonation isn't implemented, because it would need the `impersonate` verb (D-12).
+- **K8S-12 CIDRs.** Pod CIDRs come from `node.spec.podCIDRs`, and service CIDRs from `ServiceCIDR` objects (GA in 1.33). With Azure CNI without overlay, nodes report no pod CIDR, so K8S-12 says to record the node subnets instead.
+- **NET-04 (proxy).** Uses the settings file's proxy if set, otherwise the workstation's `HTTPS_PROXY`/`NO_PROXY`. A CIDR in NO_PROXY covers a subnet it contains. A domain entry covers the domain itself and its subdomains, with or without a leading dot. It warns if the settings file and the workstation environment name different proxies. Node runtime proxy config isn't read (D-13).
+- **REG-01 (registry login).** Authenticates to `registry.url` over the Docker Registry v2 API, answering either a bearer-token or a basic-auth challenge, and requires `GET /v2/` to return 200. No layers are pulled. In mirror mode it checks the mirror credentials. The workstation's proxy environment is used.
+- **REG-02 and REG-04 (mirror contents).** The chart is checked by a HEAD request for its manifest at `<operatorChartRef>:<armorVersion>`. REG-04 checks each release image by digest in the mirror, assuming the mirror keeps the same repository paths.
+  - REG-04 writes `image-overrides.yaml` (a list of `original` and `image` pairs) to the output directory. It's a generic format until the ArmorPlatform schema is available (Phase 2, R2.2).
+- **REG-05 (pull secrets).** Reads `kubernetes.io/dockerconfigjson` secrets in each namespace listed in `armorNamespaces`, and looks only at which registry hosts they cover.
+  - An expiry is only read from an annotation named `expires`, `expiry`, `expiration`, `expires-at` or `valid-until` (any prefix, RFC 3339 or YYYY-MM-DD). Without one it reports info.
+  - Listing secrets is sensitive, so the permission is a namespace-scoped Role, not part of the ClusterRole.
+- **PKI-02 (certificate chain).** With `certificates.sampleApiCertPath` set, the PEM file must contain the leaf, at least one intermediate and a self-signed root CA, each signed by the next. The leaf must be currently valid and usable for TLS server authentication.
+- **PKI-03 (API SANs).** Reads the planned SANs from `certificates.plannedApiSans`, or else from the sample certificate. With neither, it's skipped with that reason, rather than failed.
+- **TLS in one place (D-20).** `internal/tlsutil` builds every outbound TLS configuration (TLS 1.2 minimum). Redirects to plain HTTP aren't followed.

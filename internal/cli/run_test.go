@@ -2,6 +2,7 @@ package cli
 
 import (
 	"context"
+	"errors"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -11,6 +12,7 @@ import (
 	"github.com/shariff25/agent-goverance-OS/armor-preflight/internal/catalog"
 	"github.com/shariff25/agent-goverance-OS/armor-preflight/internal/engine"
 	"github.com/shariff25/agent-goverance-OS/armor-preflight/internal/exitcode"
+	"github.com/shariff25/agent-goverance-OS/armor-preflight/internal/kube"
 	"github.com/shariff25/agent-goverance-OS/armor-preflight/internal/model"
 	"github.com/shariff25/agent-goverance-OS/armor-preflight/internal/output"
 )
@@ -66,10 +68,16 @@ var testEnv = map[string]string{"REG_PW": "test-registry-password", "BAK_KEY": "
 
 func withFakes(t *testing.T, reg func() engine.Registry) {
 	t.Helper()
-	oldReg, oldEnv := registry, lookupEnv
+	oldReg, oldEnv, oldKube := registry, lookupEnv, loadKube
 	registry = reg
 	lookupEnv = func(k string) (string, bool) { v, ok := testEnv[k]; return v, ok }
-	t.Cleanup(func() { registry, lookupEnv = oldReg, oldEnv })
+	loadKube = noCluster
+	t.Cleanup(func() { registry, lookupEnv, loadKube = oldReg, oldEnv, oldKube })
+}
+
+// noCluster keeps CLI tests hermetic: they never use a real kubeconfig.
+func noCluster(kube.Options) (*kube.Clients, error) {
+	return nil, errors.New("no cluster in tests")
 }
 
 func TestRunExitCodes(t *testing.T) {
@@ -170,10 +178,13 @@ func TestInvalidSettingsIsToolError(t *testing.T) {
 }
 
 func TestUnimplementedChecksMakeRunExit3(t *testing.T) {
-	// The real registry: checks land in M3 to M6.
+	// The real registry: the remaining checks land in M4 to M6.
+	oldKube := loadKube
+	loadKube = noCluster
+	t.Cleanup(func() { loadKube = oldKube })
 	dir := t.TempDir()
 	out, err := execute("run", "workstation", "-o", dir)
-	if exitcode.FromError(err) != exitcode.ToolError || !strings.Contains(err.Error(), "does not implement 35 of 35 checks") {
+	if exitcode.FromError(err) != exitcode.ToolError || !regexp.MustCompile(`does not implement \d+ of 35 checks`).MatchString(err.Error()) {
 		t.Fatalf("got %v", err)
 	}
 	if !regexp.MustCompile(`(?m)^  INCOMPLETE   `).MatchString(out) {

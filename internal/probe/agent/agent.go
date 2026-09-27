@@ -4,8 +4,10 @@
 package agent
 
 import (
+	"bytes"
 	"context"
 	"crypto/x509"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -22,6 +24,7 @@ import (
 	"github.com/shariff25/agent-goverance-OS/armor-preflight/internal/azblob"
 	"github.com/shariff25/agent-goverance-OS/armor-preflight/internal/probe/nettest"
 	"github.com/shariff25/agent-goverance-OS/armor-preflight/internal/probe/protocol"
+	"github.com/shariff25/agent-goverance-OS/armor-preflight/internal/probe/sgx"
 	"github.com/shariff25/agent-goverance-OS/armor-preflight/internal/registry"
 	"github.com/shariff25/agent-goverance-OS/armor-preflight/internal/tlsutil"
 )
@@ -34,6 +37,8 @@ type Agent struct {
 	Roots          *x509.CertPool
 	CredentialsDir string
 	Now            func() time.Time
+	// SGX generates and verifies quotes; the standard image has none.
+	SGX sgx.Provider
 }
 
 // maxParallel bounds concurrent endpoint tests.
@@ -90,9 +95,15 @@ func (a *Agent) defaults() {
 	if a.Now == nil {
 		a.Now = time.Now
 	}
+	if a.SGX == nil {
+		a.SGX = sgx.Unsupported{}
+	}
 }
 
 func (a *Agent) test(ctx context.Context, req protocol.Request) ([]protocol.Stage, error) {
+	if req.SGX != nil {
+		return a.quote(ctx, req.SGX), ctx.Err()
+	}
 	timeout := req.Timeout
 	if timeout <= 0 {
 		timeout = 10 * time.Second
@@ -252,4 +263,34 @@ func readRequest(path string) (protocol.Request, error) {
 		return req, fmt.Errorf("parse request: %w", err)
 	}
 	return req, nil
+}
+
+// quote generates a quote bound to the nonce and verifies it (CC-05).
+func (a *Agent) quote(ctx context.Context, r *protocol.SGX) []protocol.Stage {
+	nonce, err := hex.DecodeString(r.Nonce)
+	if err != nil || len(nonce) == 0 || len(nonce) > 64 {
+		return []protocol.Stage{{Stage: protocol.StageQuote, OK: false, Detail: "the request nonce is not 1 to 64 bytes of hex"}}
+	}
+	q, err := a.SGX.Quote(ctx, nonce)
+	if err != nil {
+		return []protocol.Stage{{Stage: protocol.StageQuote, OK: false, Detail: "could not generate a quote: " + err.Error()}}
+	}
+	out := []protocol.Stage{{Stage: protocol.StageQuote, OK: true, Detail: fmt.Sprintf("generated a %d-byte quote", len(q))}}
+	v, err := a.SGX.Verify(ctx, q)
+	if err != nil {
+		return append(out, protocol.Stage{Stage: protocol.StageVerify, OK: false, Detail: "the quote did not verify: " + err.Error()})
+	}
+	matches := bytes.HasPrefix(v.ReportData, nonce)
+	s := protocol.Stage{Stage: protocol.StageVerify, OK: matches,
+		Detail: fmt.Sprintf("the quote verified with TCB status %s", v.TCBStatus),
+		Data: map[string]string{
+			protocol.DataTCBStatus:    v.TCBStatus,
+			protocol.DataAdvisories:   strings.Join(v.Advisories, ","),
+			protocol.DataCollateral:   v.Collateral,
+			protocol.DataNonceMatches: strconv.FormatBool(matches),
+		}}
+	if !matches {
+		s.Detail = "the verified quote does not carry this run's nonce (a replayed or cached quote)"
+	}
+	return append(out, s)
 }

@@ -3,9 +3,7 @@ package checks
 
 import "github.com/shariff25/agent-goverance-OS/armor-preflight/internal/engine"
 
-// Registry returns every implemented check, keyed by catalog ID. Checks are
-// added area by area in milestones M3 to M6; until a check is here, runs
-// report it as not implemented and exit 3.
+// Registry returns every implemented check, keyed by catalog ID.
 func Registry() engine.Registry {
 	return engine.Registry{
 		"WS-01":  ws01,
@@ -25,6 +23,7 @@ func Registry() engine.Registry {
 		"CC-02":  cc02,
 		"CC-03":  cc03,
 		"CC-04":  cc04,
+		"CC-05":  cc05,
 		"NET-01": net01,
 		"NET-02": net02,
 		"NET-03": net03,

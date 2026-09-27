@@ -177,20 +177,23 @@ func TestInvalidSettingsIsToolError(t *testing.T) {
 	}
 }
 
-func TestUnimplementedChecksMakeRunExit3(t *testing.T) {
-	// The real registry: the remaining checks land in M4 to M6.
+// With every check implemented, a run with the real registry reaches a
+// verdict. Without a cluster, WS-01 fails and the run is NOT READY (exit 2),
+// not INCOMPLETE.
+func TestRealRegistryReachesAVerdict(t *testing.T) {
 	oldKube := loadKube
 	loadKube = noCluster
 	t.Cleanup(func() { loadKube = oldKube })
 	dir := t.TempDir()
 	out, err := execute("run", "workstation", "-o", dir)
-	if exitcode.FromError(err) != exitcode.ToolError || !regexp.MustCompile(`does not implement \d+ of 35 checks`).MatchString(err.Error()) {
-		t.Fatalf("got %v", err)
+	if exitcode.FromError(err) != exitcode.NotReady {
+		t.Fatalf("exit %d: %v\n%s", exitcode.FromError(err), err, out)
 	}
-	if !regexp.MustCompile(`(?m)^  INCOMPLETE   `).MatchString(out) {
-		t.Fatalf("an incomplete run must not print a verdict:\n%s", out)
+	rec, err := output.ReadRecord(dir)
+	if err != nil || rec.Verdict != "NOT_READY" || len(rec.Unimplemented) != 0 {
+		t.Fatalf("%+v %v", rec, err)
 	}
-	if rec, err := output.ReadRecord(dir); err != nil || rec.Verdict != output.VerdictIncomplete {
-		t.Fatalf("record %v %v", rec, err)
+	if !strings.Contains(out, "FAIL WS-01") || !strings.Contains(out, "no cluster in tests") {
+		t.Fatalf("WS-01 should explain the missing cluster:\n%s", out)
 	}
 }

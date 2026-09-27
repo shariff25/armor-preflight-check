@@ -183,3 +183,15 @@ The user chose not to gate the build on D-1 to D-3, so the plan's defaults apply
   - Interception with and without a trusted CA.
   - DNS failure skipping NET-02 on that pool only.
   - Refused syslog, a blocked PCCS, refused attestation, a missing image, denied blob access, 8 seconds of clock skew, and a pool whose probe image couldn't be pulled.
+
+## M6
+
+- **CC-05 sits behind `internal/probe/sgx.Provider`** (`Quote` and `Verify`). The standard probe image uses `Unsupported`, which reports that it can't generate quotes. An SGX probe image built with the toolchain Fortanix chooses supplies a real provider (D-5). The image contract is in `docs/sgx-probe.md`. No enclave code is included, because the toolchain isn't decided and there's no SGX hardware to test on here.
+- **Per-node SGX probes.** With `--sgx-probe-image`, cluster mode runs one pod on each SGX node, pinned by hostname, tolerating the node's taints, and requesting and limiting `sgx.intel.com/enclave` and `sgx.intel.com/provision`. The pod keeps every restricted Pod Security setting; the device plugin mounts the devices, so no privileges are needed, and a unit test checks this. Without `--sgx-probe-image`, CC-05 is skipped with the reason.
+- **Replay protection.** Each node's request carries a fresh 32-byte random nonce. The quote's report data must start with it, which catches a replayed or cached quote.
+- **How CC-05 treats TCB status.**
+  - `UpToDate` passes.
+  - The three "configuration or software hardening needed" statuses warn, listing advisories, because whether Armor accepts them depends on its attestation policy. This needs confirming with Fortanix.
+  - `OutOfDate`, `OutOfDateConfigurationNeeded`, `Revoked` and unknown statuses fail.
+- **CC-05 results are per node.** A node-level parent failure (CC-01, CC-02) or a pool-level one (CC-03, CC-04, REG-03 for the node's pool) skips CC-05 for that node, naming the parent. The test fixtures now set the node-to-pool map the way the CLI does, so pool-to-node skipping is covered.
+- **All 35 checks are implemented.** A test fails the build if the catalog and the registry of implemented checks ever differ, in either direction. A run now always reaches READY, READY WITH WARNINGS or NOT READY, unless Preflight itself hits an internal error.

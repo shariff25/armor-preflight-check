@@ -292,7 +292,7 @@ func (f *fixture) env(mode engine.Mode) *engine.Env {
 		t.Fatal(err)
 	}
 	vars := f.envVars
-	return &engine.Env{
+	env := &engine.Env{
 		Mode: mode, Catalog: cat, Settings: st, SettingsFile: "settings.yaml",
 		LookupEnv:    func(k string) (string, bool) { v, ok := vars[k]; return v, ok },
 		Kube:         &kube.Clients{Core: f.core, Dynamic: f.dyn, Context: "aks-armor-prod", Server: "https://aks-armor-prod.hcp.eastus.azmk8s.io:443"},
@@ -303,6 +303,9 @@ func (f *fixture) env(mode engine.Mode) *engine.Env {
 		ProbeImage:   "example.invalid/armor-preflight-probe@sha256:abc",
 		Now:          func() time.Time { return time.Date(2026, 9, 26, 15, 12, 4, 0, time.UTC) },
 	}
+	env.Topology = Topology(context.Background(), env)
+	f.core.ClearActions() // the topology lookup is the CLI's, not a check's
+	return env
 }
 
 // writeChain writes leaf, intermediate and root certificates to a PEM file.

@@ -45,6 +45,15 @@ type Request struct {
 	// TrustedCAPEM is a customer CA (for example a TLS-inspecting proxy's)
 	// checked separately from the public roots.
 	TrustedCAPEM string `json:"trustedCaPem,omitempty"`
+	// SGX asks an SGX node probe to generate and verify a quote (CC-05).
+	SGX *SGX `json:"sgx,omitempty"`
+}
+
+// SGX asks for a quote bound to a fresh nonce, so a replayed quote is
+// detected.
+type SGX struct {
+	// Nonce (hex) must appear at the start of the quote's report data.
+	Nonce string `json:"nonce"`
 }
 
 // Target is an endpoint to test through the DNS, TCP, TLS and HTTP stages.
@@ -96,6 +105,8 @@ const (
 	StageBlobWrite  = "blob-write"
 	StageBlobRead   = "blob-read"
 	StageBlobDelete = "blob-delete"
+	StageQuote      = "quote"
+	StageVerify     = "verify"
 )
 
 // Keys in Stage.Data.
@@ -111,6 +122,10 @@ const (
 	DataDate           = "date"        // the HTTP Date header, RFC 1123
 	DataSkewSeconds    = "skewSeconds" // node clock minus the median Date header
 	DataViaProxy       = "viaProxy"
+	DataTCBStatus      = "tcbStatus"
+	DataAdvisories     = "advisories"
+	DataCollateral     = "collateral"
+	DataNonceMatches   = "nonceMatches"
 )
 
 // Stage is one observation, for example a DNS lookup or TLS handshake.

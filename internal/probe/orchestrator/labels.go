@@ -15,6 +15,7 @@ const (
 	ManagedByValue  = "armor-preflight"
 	LabelRunID      = "armor-preflight/run-id"
 	LabelNodePool   = "armor-preflight/node-pool"
+	LabelNode       = "armor-preflight/node"
 	NamespacePrefix = "armor-preflight-"
 )
 

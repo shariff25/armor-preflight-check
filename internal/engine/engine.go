@@ -126,10 +126,16 @@ func (e *Env) Artifacts() map[string][]byte {
 	return out
 }
 
-// ProbeData is what the probe pods reported, by node pool.
+// ProbeData is what the probe pods reported: by node pool, and for the
+// per-node SGX probes (CC-05) by node.
 type ProbeData struct {
 	Results    map[string]protocol.Result
 	PoolErrors map[string]string
+	// NodeResults and NodeErrors come from the per-node SGX probes.
+	NodeResults map[string]protocol.Result
+	NodeErrors  map[string]string
+	// SGXUnavailable, when set, is why no SGX probe ran.
+	SGXUnavailable string
 }
 
 // ProbeNotes explain probe work that was not planned.

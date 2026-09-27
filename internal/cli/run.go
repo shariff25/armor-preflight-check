@@ -2,6 +2,8 @@ package cli
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/hex"
 	"fmt"
 	"io"
 	"net"
@@ -44,12 +46,13 @@ const DefaultProbeTimeout = 3 * time.Minute
 
 type runOptions struct {
 	*globalOptions
-	mode         engine.Mode
-	settingsFile string
-	outputDir    string
-	checkTimeout time.Duration
-	probeImage   string
-	probeTimeout time.Duration
+	mode          engine.Mode
+	settingsFile  string
+	outputDir     string
+	checkTimeout  time.Duration
+	probeImage    string
+	sgxProbeImage string
+	probeTimeout  time.Duration
 }
 
 func newRunCmd(g *globalOptions) *cobra.Command {
@@ -82,6 +85,7 @@ func newRunModeCmd(g *globalOptions, mode engine.Mode, short string) *cobra.Comm
 	f.DurationVarP(&o.checkTimeout, "timeout", "t", DefaultCheckTimeout, "per-check timeout")
 	if mode == engine.ModeCluster {
 		f.StringVar(&o.probeImage, "probe-image", "", "probe image, preferably pinned by digest (default: the image this release was built with)")
+		f.StringVar(&o.sgxProbeImage, "sgx-probe-image", "", "SGX probe image for CC-05 (quote generation on each SGX node; see docs/sgx-probe.md)")
 		f.DurationVar(&o.probeTimeout, "probe-timeout", DefaultProbeTimeout, "how long to wait for probe pods")
 	}
 	return cmd
@@ -272,6 +276,46 @@ func (o *runOptions) startCluster(ctx context.Context, env *engine.Env, orch *or
 		}
 	}
 	sort.Slice(probes, func(i, j int) bool { return probes[i].NodePool < probes[j].NodePool })
+
+	sgxProbes, err := o.runSGXProbes(ctx, env, orch)
+	if err != nil {
+		return nil, err
+	}
+	return append(probes, sgxProbes...), nil
+}
+
+// runSGXProbes runs one SGX probe per SGX node for CC-05, each asked to
+// bind its quote to a fresh random nonce.
+func (o *runOptions) runSGXProbes(ctx context.Context, env *engine.Env, orch *orchestrator.Orchestrator) ([]output.Probe, error) {
+	if o.sgxProbeImage == "" {
+		env.Probes.SGXUnavailable = "no SGX probe image is configured; CC-05 needs one that can generate quotes (pass --sgx-probe-image; see docs/sgx-probe.md)"
+		return nil, nil
+	}
+	nodes, err := checks.SGXNodes(ctx, env)
+	if err != nil {
+		env.Probes.SGXUnavailable = "could not list SGX nodes: " + err.Error()
+		return nil, nil
+	}
+	if len(nodes) == 0 {
+		env.Probes.SGXUnavailable = "no SGX nodes found"
+		return nil, nil
+	}
+	request := func(node string) protocol.Request {
+		nonce := make([]byte, 32)
+		if _, err := rand.Read(nonce); err != nil {
+			panic(err) // crypto/rand does not fail on supported platforms
+		}
+		return protocol.Request{Version: protocol.Version, RunID: orch.RunID, SGX: &protocol.SGX{Nonce: hex.EncodeToString(nonce)}, Timeout: o.checkTimeout}
+	}
+	outcome, err := orch.RunNodeProbes(ctx, o.sgxProbeImage, nodes, request, o.probeTimeout)
+	if err != nil {
+		return nil, fmt.Errorf("run interrupted while SGX probes were running: %w", err)
+	}
+	env.Probes.NodeResults, env.Probes.NodeErrors = outcome.Results, outcome.PoolErrors
+	var probes []output.Probe
+	for _, pr := range outcome.Probes {
+		probes = append(probes, output.Probe{NodePool: env.Topology.PoolOf(pr.Node), Node: pr.Node, Pod: pr.Pod, Image: pr.Image, ImageDigest: pr.ImageID, Error: outcome.PoolErrors[pr.Node]})
+	}
 	return probes, nil
 }
 

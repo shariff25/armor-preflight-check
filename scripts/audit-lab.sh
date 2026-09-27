@@ -172,7 +172,7 @@ set +e
 preflight run workstation -f settings.yaml -o "$WORK/out" > preflight.txt 2>&1
 code=$?
 set -e
-echo "armor-preflight exited $code (3 is expected until every check is implemented)"
+echo "armor-preflight exited $code (a verdict; the lab environment is not Armor-ready, so 2 is expected)"
 workstation_lines=$(wc -l < "$WORK/audit.log")
 
 python3 - "$WORK/audit.log" "$WORK/preflight.txt" "$workstation_lines" <<'PY' || failures=$((failures + 1))

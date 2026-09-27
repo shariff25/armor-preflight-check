@@ -11,6 +11,7 @@ import (
 
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 
@@ -113,7 +114,7 @@ func (o *Orchestrator) RunProbes(ctx context.Context, pools []Pool, request func
 		}
 		podPool[podName] = p.Name
 	}
-	o.wait(ctx, podPool, timeout, out)
+	o.wait(ctx, waitSpec{keys: podPool, image: o.Image}, timeout, out)
 	sort.Slice(out.Probes, func(i, j int) bool { return out.Probes[i].NodePool < out.Probes[j].NodePool })
 
 	pullFailures := 0
@@ -128,10 +129,81 @@ func (o *Orchestrator) RunProbes(ctx context.Context, pools []Pool, request func
 	return out, ctx.Err()
 }
 
+// SGXResources are requested by per-node SGX probes, so the SGX device
+// plugin mounts the enclave and provisioning devices (no privileges needed).
+var SGXResources = []corev1.ResourceName{"sgx.intel.com/enclave", "sgx.intel.com/provision"}
+
+// NodeTarget is one node to run a per-node probe on.
+type NodeTarget struct {
+	Name        string
+	Tolerations []corev1.Toleration
+}
+
+// RunNodeProbes runs one SGX probe pod on each node (CC-05), pinned by
+// hostname and requesting the SGX device plugin resources. Results are
+// keyed by node name.
+func (o *Orchestrator) RunNodeProbes(ctx context.Context, image string, nodes []NodeTarget, request func(node string) protocol.Request, timeout time.Duration) (*Outcome, error) {
+	out := &Outcome{Results: map[string]protocol.Result{}, PoolErrors: map[string]string{}}
+	podNode := map[string]string{}
+	for _, n := range nodes {
+		body, err := json.Marshal(request(n.Name))
+		if err != nil {
+			return nil, err
+		}
+		cmName := objectName("sgx-request-", n.Name)
+		cm := &corev1.ConfigMap{ObjectMeta: metav1.ObjectMeta{Name: cmName, Namespace: o.Namespace, Labels: Labels(o.RunID)},
+			Data: map[string]string{"request.json": string(body)}}
+		if _, err := o.Core.CoreV1().ConfigMaps(o.Namespace).Create(ctx, cm, metav1.CreateOptions{}); err != nil {
+			return nil, fmt.Errorf("create SGX probe request for %s: %w", n.Name, err)
+		}
+		podName := objectName("sgx-probe-", n.Name)
+		pod := PodSpec(podName, o.Namespace, o.RunID, n.Name, image, map[string]string{"kubernetes.io/hostname": n.Name}, n.Tolerations, cmName, false)
+		delete(pod.Labels, LabelNodePool)
+		pod.Labels[LabelNode] = labelValue(n.Name)
+		c := &pod.Spec.Containers[0]
+		for _, r := range SGXResources {
+			one := resource.MustParse("1")
+			c.Resources.Requests[r] = one
+			c.Resources.Limits[r] = one
+		}
+		if _, err := o.Core.CoreV1().Pods(o.Namespace).Create(ctx, pod, metav1.CreateOptions{}); err != nil {
+			out.PoolErrors[n.Name] = fmt.Sprintf("SGX probe pod could not be created: %v", err)
+			continue
+		}
+		podNode[podName] = n.Name
+	}
+	o.wait(ctx, waitSpec{keys: podNode, image: image, perNode: true}, timeout, out)
+	sort.Slice(out.Probes, func(i, j int) bool { return out.Probes[i].Node < out.Probes[j].Node })
+	return out, ctx.Err()
+}
+
 // pullWaitReasons mean the image cannot be pulled.
 var pullWaitReasons = map[string]bool{"ErrImagePull": true, "ImagePullBackOff": true, "InvalidImageName": true, "ErrImageNeverPull": true}
 
-func (o *Orchestrator) wait(ctx context.Context, podPool map[string]string, timeout time.Duration, out *Outcome) {
+// waitSpec says which pods to wait for: pod name -> node pool (or node,
+// for per-node probes).
+type waitSpec struct {
+	keys    map[string]string
+	image   string
+	perNode bool
+}
+
+func (s waitSpec) where(key string) string {
+	if s.perNode {
+		return "node " + key
+	}
+	return "node pool " + key
+}
+
+func (s waitSpec) record(key, pod, node string) ProbeRecord {
+	if s.perNode {
+		return ProbeRecord{Node: key, Pod: pod, Image: s.image}
+	}
+	return ProbeRecord{NodePool: key, Node: node, Pod: pod, Image: s.image}
+}
+
+func (o *Orchestrator) wait(ctx context.Context, spec waitSpec, timeout time.Duration, out *Outcome) {
+	podPool := spec.keys
 	deadline := o.Now().Add(timeout)
 	pending := map[string]bool{}
 	for name := range podPool {
@@ -146,7 +218,7 @@ func (o *Orchestrator) wait(ctx context.Context, podPool map[string]string, time
 				if !ok || !pending[p.Name] {
 					continue
 				}
-				if done := o.observe(ctx, p, pool, out); done {
+				if done := o.observe(ctx, p, pool, spec, out); done {
 					delete(pending, p.Name)
 				}
 			}
@@ -160,7 +232,7 @@ func (o *Orchestrator) wait(ctx context.Context, podPool map[string]string, time
 				if _, has := out.PoolErrors[pool]; !has {
 					out.PoolErrors[pool] = fmt.Sprintf("probe pod %s did not finish within %s", name, timeout)
 				}
-				out.Probes = append(out.Probes, ProbeRecord{NodePool: pool, Pod: name, Image: o.Image})
+				out.Probes = append(out.Probes, spec.record(pool, name, ""))
 			}
 			return
 		}
@@ -171,27 +243,27 @@ func (o *Orchestrator) wait(ctx context.Context, podPool map[string]string, time
 	}
 	for name := range pending {
 		out.PoolErrors[podPool[name]] = "interrupted before the probe finished"
-		out.Probes = append(out.Probes, ProbeRecord{NodePool: podPool[name], Pod: name, Image: o.Image})
+		out.Probes = append(out.Probes, spec.record(podPool[name], name, ""))
 	}
 }
 
 // observe records a pod's state; it returns true once nothing more will
 // change for that pod.
-func (o *Orchestrator) observe(ctx context.Context, p *corev1.Pod, pool string, out *Outcome) bool {
-	rec := ProbeRecord{NodePool: pool, Node: p.Spec.NodeName, Pod: p.Name, Image: o.Image}
+func (o *Orchestrator) observe(ctx context.Context, p *corev1.Pod, pool string, spec waitSpec, out *Outcome) bool {
+	rec := spec.record(pool, p.Name, p.Spec.NodeName)
 	for _, cs := range p.Status.ContainerStatuses {
 		if cs.ImageID != "" {
 			rec.ImageID = cs.ImageID
 		}
 		if w := cs.State.Waiting; w != nil && pullWaitReasons[w.Reason] {
-			out.PoolErrors[pool] = fmt.Sprintf("probe image %s could not be pulled on node pool %s (%s: %s)", o.Image, pool, w.Reason, firstLine(w.Message))
+			out.PoolErrors[pool] = fmt.Sprintf("probe image %s could not be pulled on %s (%s: %s)", spec.image, spec.where(pool), w.Reason, firstLine(w.Message))
 			out.Probes = append(out.Probes, rec)
 			return true
 		}
 	}
 	for _, c := range p.Status.Conditions {
 		if c.Type == corev1.PodScheduled && c.Status == corev1.ConditionFalse && c.Reason == corev1.PodReasonUnschedulable {
-			out.PoolErrors[pool] = fmt.Sprintf("probe pod could not be scheduled on node pool %s: %s", pool, firstLine(c.Message))
+			out.PoolErrors[pool] = fmt.Sprintf("probe pod could not be scheduled on %s: %s", spec.where(pool), firstLine(c.Message))
 			// Keep waiting: the scheduler may still place it before the deadline.
 			return false
 		}
@@ -211,11 +283,11 @@ func (o *Orchestrator) observe(ctx context.Context, p *corev1.Pod, pool string, 
 	res, err := protocol.Decode(log)
 	switch {
 	case err != nil:
-		out.PoolErrors[pool] = fmt.Sprintf("probe on node pool %s returned no usable result: %v", pool, err)
+		out.PoolErrors[pool] = fmt.Sprintf("probe on %s returned no usable result: %v", spec.where(pool), err)
 	case res.Error != "":
-		out.PoolErrors[pool] = fmt.Sprintf("probe on node pool %s failed: %s", pool, res.Error)
+		out.PoolErrors[pool] = fmt.Sprintf("probe on %s failed: %s", spec.where(pool), res.Error)
 	case res.RunID != o.RunID:
-		out.PoolErrors[pool] = fmt.Sprintf("probe on node pool %s answered for run %q", pool, res.RunID)
+		out.PoolErrors[pool] = fmt.Sprintf("probe on %s answered for run %q", spec.where(pool), res.RunID)
 	default:
 		out.Results[pool] = res
 	}

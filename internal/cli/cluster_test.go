@@ -172,3 +172,41 @@ func TestCleanupCommand(t *testing.T) {
 		t.Fatalf("second run:\n%s", out)
 	}
 }
+
+func TestClusterRunWithSGXProbeImage(t *testing.T) {
+	sgxNode := &corev1.Node{ObjectMeta: metav1.ObjectMeta{Name: "aks-sgxpool1-1", Labels: map[string]string{
+		"kubernetes.azure.com/agentpool": "sgxpool1", "feature.node.kubernetes.io/cpu-security.sgx.enabled": "true"}}}
+	core := fakeCluster(t, false, sgxNode)
+	withCluster(t, core)
+	dir := t.TempDir()
+	out, err := execute("run", "cluster", "-f", writeSettings(t, settingsYAML), "-o", dir,
+		"--probe-image", testProbeImage, "--sgx-probe-image", "example.invalid/armor-preflight-probe-sgx@sha256:def")
+	if exitcode.FromError(err) != exitcode.Ready {
+		t.Fatalf("exit %d: %v\n%s", exitcode.FromError(err), err, out)
+	}
+	created := 0
+	for _, a := range core.Actions() {
+		if a.GetVerb() == "create" && a.GetResource().Resource == "pods" {
+			pod := a.(k8stesting.CreateAction).GetObject().(*corev1.Pod)
+			if pod.Spec.NodeSelector["kubernetes.io/hostname"] == "aks-sgxpool1-1" {
+				created++
+				if _, ok := pod.Spec.Containers[0].Resources.Limits["sgx.intel.com/enclave"]; !ok {
+					t.Error("SGX probe does not request sgx.intel.com/enclave")
+				}
+			}
+		}
+	}
+	if created != 1 {
+		t.Fatalf("%d SGX probe pods created", created)
+	}
+	rec, _ := output.ReadRecord(dir)
+	var found bool
+	for _, p := range rec.Probes {
+		if p.Node == "aks-sgxpool1-1" && p.Image == "example.invalid/armor-preflight-probe-sgx@sha256:def" && p.NodePool == "sgxpool1" {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("SGX probe missing from the report: %+v", rec.Probes)
+	}
+}

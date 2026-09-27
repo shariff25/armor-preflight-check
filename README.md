@@ -2,7 +2,7 @@
 
 `armor-preflight` checks whether a customer environment is ready for a Fortanix Armor on-prem install, before anyone starts the install. It checks every prerequisite from where Armor will actually run and tells each customer team what it needs to fix.
 
-> **Status: milestone M5.** Every check except CC-05 (SGX quote generation, M6) is implemented. That includes the nine probe checks, run from every node pool: DNS, TCP and TLS reachability; TLS interception; syslog; clock skew; PCCS and attestation reachability; image resolution; and the backup blob test. Until CC-05 lands, `run` lists it as not implemented, writes its outputs with verdict `INCOMPLETE` and exits 3. See [PLAN.md](PLAN.md) for the build order.
+> **Status: milestone M6.** All 35 Phase 1 checks are implemented, and a run reaches READY, READY WITH WARNINGS or NOT READY. CC-05 (SGX quote generation) needs an SGX probe image built with the enclave toolchain Fortanix chooses. Pass it with `--sgx-probe-image`, and see [docs/sgx-probe.md](docs/sgx-probe.md) for the contract that image must meet. Without it, CC-05 is skipped with that reason. M7 covers release signing, the SBOM and the security brief. See [PLAN.md](PLAN.md).
 
 ## Commands
 
@@ -14,7 +14,10 @@
 | `armor-preflight cleanup` | Deletes leftover Preflight objects, found by label. `--run-id` limits it to one run. |
 | `armor-preflight version` | Prints the Preflight version, catalog version and supported Armor versions. |
 
-`run cluster` also takes `--probe-image` (the probe image, preferably pinned by digest) and `--probe-timeout` (default 3 minutes).
+`run cluster` also takes:
+- `--probe-image`: the probe image, preferably pinned by digest.
+- `--sgx-probe-image`: the SGX probe image for CC-05 (see [docs/sgx-probe.md](docs/sgx-probe.md)).
+- `--probe-timeout`: how long to wait for probes (default 3 minutes).
 
 | Flag | Meaning | Default |
 |---|---|---|
@@ -124,4 +127,15 @@ goreleaser release --snapshot --clean --skip=sign,sbom
 
 ## Manual tests
 
-Criteria that need a real SGX cluster or people are tested by hand. The steps are added as each milestone lands.
+These criteria need a real SGX cluster, real cloud services or people, so they're tested by hand.
+
+| Criterion | How |
+|---|---|
+| R1.1 A reference AKS cluster that meets every prerequisite returns READY | Run `run cluster` with both probe images on a compliant AKS cluster with an SGX pool. Expect exit 0 and zero fail results. |
+| R1.2 CC-05 generates and verifies a quote on every SGX node | Follow [docs/sgx-probe.md](docs/sgx-probe.md), section "Manual test". |
+| R1.2 Probe network checks on a real cluster | Block `cr.download.fortanix.com` for the SGX pool's subnet only (NSG rule), then run. Expect NET-02 to fail for that pool only, with a matching firewall CSV row. |
+| R1.3 Usability of the firewall CSV | Give three network engineers who are new to Armor the CSV from a run with blocked paths. Each should identify every required rule from the CSV alone. |
+| R1.4 Packet capture | Capture on the workstation and a node during a full run. Outbound connections should go only to the endpoints in the catalog, the registry and the storage account. |
+| R1.4 Security brief approval | Fortanix Security reviews the security brief (M7). |
+| R1.6 Timing on 10 nodes | Time `run cluster` on a 10-node cluster. It should finish in under 5 minutes. |
+| BAK-02 against real Azure Storage | Run with a real storage account key, then with a SAS token. Expect the test blob to be written, read and deleted, and no blob left in the container. |

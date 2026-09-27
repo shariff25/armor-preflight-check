@@ -2,7 +2,13 @@
 
 `armor-preflight` checks whether a customer environment is ready for a Fortanix Armor on-prem install, before anyone starts the install. It checks every prerequisite from where Armor will actually run and tells each customer team what it needs to fix.
 
-> **Status: milestone M6.** All 35 Phase 1 checks are implemented, and a run reaches READY, READY WITH WARNINGS or NOT READY. CC-05 (SGX quote generation) needs an SGX probe image built with the enclave toolchain Fortanix chooses. Pass it with `--sgx-probe-image`, and see [docs/sgx-probe.md](docs/sgx-probe.md) for the contract that image must meet. Without it, CC-05 is skipped with that reason. M7 covers release signing, the SBOM and the security brief. See [PLAN.md](PLAN.md).
+> **Status: Phase 1 complete (milestone M7).**
+> - All 35 checks are implemented.
+> - Releases are signed, with checksums, SBOMs and a probe image archive for mirrors.
+> - [ACCEPTANCE.md](ACCEPTANCE.md) maps every acceptance criterion to its evidence, and lists what still needs a manual run or a Fortanix decision.
+> - For security teams: [SECURITY-BRIEF.md](SECURITY-BRIEF.md) (one page) and [SECURITY-REVIEW.md](SECURITY-REVIEW.md) (the full review).
+>
+> CC-05 (SGX quote generation) needs an SGX probe image built with the enclave toolchain Fortanix chooses. Pass it with `--sgx-probe-image`; [docs/sgx-probe.md](docs/sgx-probe.md) has the contract that image must meet. Without it, CC-05 is skipped with that reason.
 
 ## Commands
 
@@ -12,10 +18,10 @@
 | `armor-preflight run cluster` | Runs the workstation checks, then probe pods on each node pool. |
 | `armor-preflight bundle` | Packages the latest run into a redacted archive for a support ticket. `--list` shows the contents without writing it. |
 | `armor-preflight cleanup` | Deletes leftover Preflight objects, found by label. `--run-id` limits it to one run. |
-| `armor-preflight version` | Prints the Preflight version, catalog version and supported Armor versions. |
+| `armor-preflight version` | Prints the Preflight version, catalog version, supported Armor versions and the release's probe image (the digest to mirror). |
 
 `run cluster` also takes:
-- `--probe-image`: the probe image, preferably pinned by digest.
+- `--probe-image`: the probe image, preferably pinned by digest. A release build defaults to its own signed image; see `armor-preflight version`.
 - `--sgx-probe-image`: the SGX probe image for CC-05 (see [docs/sgx-probe.md](docs/sgx-probe.md)).
 - `--probe-timeout`: how long to wait for probes (default 3 minutes).
 
@@ -87,6 +93,22 @@ Those credentials reach the probe through a Secret in the temporary namespace, w
 
 The probe image ([`deploy/probe/Dockerfile`](deploy/probe/Dockerfile), `make probe-image`) is a static binary of about 1.8 MB on distroless. It runs as a non-root user with a read-only root filesystem and every capability dropped. It needs no Kubernetes API access. If the nodes can't pull it, Preflight names the image to mirror and still finishes every workstation check.
 
+### Mirroring the probe image
+
+Each release publishes the image as `armor-preflight-probe_<version>_oci.tar`, an OCI archive holding both platforms. Pushing it keeps its digest, so the image in your registry is exactly the one the release signed.
+
+1. Verify the release (see [Verifying a release](#verifying-a-release)).
+2. Push the archive to your registry, for example with [crane](https://github.com/google/go-containerregistry/tree/main/cmd/crane):
+
+   ```
+   mkdir probe && tar -xf armor-preflight-probe_<version>_oci.tar -C probe
+   crane push probe registry.example.com/armor-preflight-probe:<version>
+   ```
+
+3. Run with `--probe-image registry.example.com/armor-preflight-probe@<digest>`, where the digest is the one in `probe-image.txt`.
+
+`docker load -i` also accepts the archive, on Docker with the containerd image store.
+
 ## Permissions
 
 `run workstation` only reads from the cluster. [`deploy/rbac/workstation.yaml`](deploy/rbac/workstation.yaml) is the least-privilege role it needs:
@@ -108,9 +130,40 @@ In cluster mode, the lab also checks that:
 
 CI runs the lab on every change.
 
+## Verifying a release
+
+Each release ships:
+- the four binary archives, each with an SPDX SBOM;
+- the probe image archive and an SBOM for each of its platforms;
+- `probe-image.txt`, the signed image's reference;
+- `checksums.txt`, which lists every other file;
+- `checksums.txt.sigstore.json`, the cosign signature over `checksums.txt`.
+
+The probe image is also signed in its registry.
+
+Download the files you need into one directory, with `checksums.txt` and its signature, and run [`scripts/verify-release.sh`](scripts/verify-release.sh) (needs [cosign](https://docs.sigstore.dev/cosign/system_config/installation/), and jq for the image archive). It checks:
+1. the signature on `checksums.txt`;
+2. that every file you downloaded is listed there and matches;
+3. that the image archive is the image `probe-image.txt` names;
+4. that image's signature in its registry. Set `SKIP_REGISTRY=1` if the registry isn't reachable; step 3 already ties the archive to the signed checksums.
+
+Say who must have signed, one of:
+
+```
+COSIGN_PUBLIC_KEY=cosign.pub scripts/verify-release.sh ./downloads
+```
+
+```
+CERT_IDENTITY='^https://github\.com/<owner>/<repo>/\.github/workflows/armor-preflight-release\.yml@refs/tags/armor-preflight/v' \
+CERT_OIDC_ISSUER=https://token.actions.githubusercontent.com \
+  scripts/verify-release.sh ./downloads
+```
+
+The first is for a release signed with a key; use the public key Fortanix publishes. The second is for a keyless release, signed by the release workflow.
+
 ## Building
 
-Requires Go 1.25.14 or later (the oldest release without known standard-library vulnerabilities that affect this code).
+Requires Go 1.26.8 or later. Go supports only its two newest major releases, and this is the oldest supported release without known vulnerabilities that affect this code.
 
 ```
 make build    # bin/armor-preflight
@@ -119,11 +172,29 @@ make lint     # gofmt + go vet
 make cross    # static binaries for linux/darwin × amd64/arm64
 ```
 
-Releases use [goreleaser](https://goreleaser.com) (`.goreleaser.yaml`). It builds the four targets and writes SHA-256 checksums, one SPDX SBOM per archive (needs `syft`) and a cosign signature over the checksum file (needs `cosign` and `COSIGN_KEY`). To build locally without publishing:
+Releases come from [`scripts/release.sh`](scripts/release.sh), run by the release workflow when a tag `armor-preflight/vX.Y.Z` is pushed. It:
+1. builds the probe image for linux/amd64 and linux/arm64 as one OCI archive;
+2. pushes the archive and signs its digest;
+3. builds the binaries with that digest as their default probe image, plus archives, SBOMs and `checksums.txt` (goreleaser);
+4. signs `checksums.txt`.
+
+The workflow then verifies the result and drafts a GitHub release for a person to publish. Rebuilding a commit gives the same probe image digest.
+
+To build a signed release of any commit locally, you need:
+- docker buildx;
+- crane, syft, cosign and goreleaser;
+- a registry to push to.
+
+For example, with a throwaway key and a local registry:
 
 ```
-goreleaser release --snapshot --clean --skip=sign,sbom
+docker run -d -p 5000:5000 registry:3
+cosign generate-key-pair
+COSIGN_KEY=cosign.key SIGN_OFFLINE=1 PROBE_REPOSITORY=localhost:5000/armor-preflight-probe \
+  VERSION=0.0.0-dev make release-snapshot     # writes build/release
 ```
+
+CI does exactly this on every change (job `release-snapshot`), then verifies the result.
 
 ## Manual tests
 

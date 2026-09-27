@@ -196,8 +196,48 @@ The user chose not to gate the build on D-1 to D-3, so the plan's defaults apply
 - **CC-05 results are per node.** A node-level parent failure (CC-01, CC-02) or a pool-level one (CC-03, CC-04, REG-03 for the node's pool) skips CC-05 for that node, naming the parent. The test fixtures now set the node-to-pool map the way the CLI does, so pool-to-node skipping is covered.
 - **All 35 checks are implemented.** A test fails the build if the catalog and the registry of implemented checks ever differ, in either direction. A run now always reaches READY, READY WITH WARNINGS or NOT READY, unless Preflight itself hits an internal error.
 
-## Dependency security
+## M7
 
-- **Go 1.25.14 is the minimum.** `govulncheck` found vulnerabilities reachable from Preflight's code in the Go 1.24.7 standard library, some fixed only in Go 1.25 releases. `go.mod` now requires Go 1.25.14, and the probe image builds with `golang:1.25.14`, pinned by digest.
-- **`golang.org/x/net` v0.55.0 and `golang.org/x/text` v0.39.0.** These are the lowest versions that fix the advisories `govulncheck` reported. Newer releases require Go 1.26, so they wait for a deliberate toolchain move.
-- **`govulncheck` blocks merges.** A new advisory can turn CI red without any code change. That is intended: the fix is to upgrade, not to suppress the finding.
+**Toolchain and dependencies**
+
+- **Go 1.26.8.** `govulncheck` found vulnerabilities reachable from Preflight in the Go 1.24.7 standard library. Go 1.25 would fix them, but it's out of support now that Go 1.27 has shipped: Go only patches its two newest major releases. So `go.mod` requires Go 1.26.8, the newest 1.26 patch. The probe image builds with `golang:1.26.8`, pinned by digest.
+- **Libraries:** `golang.org/x/net` v0.59.0 and `golang.org/x/text` v0.42.0, the current releases, which fix the advisories `govulncheck` reported.
+- **Analysis tools:** staticcheck moves to 2026.2.1 (v0.8.1), which supports Go 1.26, and govulncheck to v1.8.0.
+- **`govulncheck` blocks merges.** A new advisory can turn CI red with no code change. That's intended: the fix is to upgrade, not to suppress the finding.
+
+**Release**
+
+- **Pipeline.** `scripts/release.sh` builds the probe image, then the binaries with that image's digest as their default, then signs `checksums.txt`. The same script makes CI's snapshot and the real release, so CI tests the release path on every change.
+- **One probe image archive.** The image is built once, for both platforms, as an OCI archive. That archive is pushed with `crane` and also published for mirrors, so a mirror holds exactly the digest the binary pins and the release signed. Per-platform `docker save` tarballs were rejected: they can't be pushed without changing the digest.
+- **Reproducible probe image.**
+  - Timestamps come from the commit time (`SOURCE_DATE_EPOCH`, with layer timestamps rewritten).
+  - No buildkit attestations: their provenance differs on every build, which changed the index digest. Provenance comes instead from the keyless certificate, which names the workflow and commit, and from the reproducible digest itself.
+  - Tested by building from a cold cache: the digest was identical.
+- **One signature covers the whole release.**
+  - `checksums.txt` lists every archive, SBOM, the image archive and `probe-image.txt`; one cosign signature over it covers them all. The image is also signed by digest in its registry.
+  - The signature is a Sigstore bundle (`checksums.txt.sigstore.json`), so it can be verified offline.
+  - `scripts/verify-release.sh` fails on any downloaded file that `checksums.txt` doesn't list. `sha256sum --ignore-missing` would pass such a file silently.
+- **Signing identity (Fortanix to decide).** `scripts/sign.sh` supports both options without changes:
+  - A key, in a KMS or a file, with the public key published on the support portal. Air-gapped customers can then verify with nothing but that file.
+  - Keyless, signed by the release workflow's GitHub identity, which needs no key management.
+
+  The release workflow uses a key when the `COSIGN_KEY` secret is set, and signs keyless otherwise.
+- **Snapshot signing stays offline.** CI signs with a throwaway key and writes nothing to the public transparency log. Releases always use the log.
+- **Draft releases only.** The release workflow creates a draft GitHub release; a person publishes it and uploads it to the support portal. The probe image is pushed when the tag is built, because the binaries embed its digest. A new GitHub package is private until someone makes it public once.
+- **Tags carry a prefix,** `armor-preflight/vX.Y.Z`, because this repository holds other projects. goreleaser can't parse that, so `release.sh` passes the version in and skips goreleaser's tag checks.
+- **Pinned by digest or commit:**
+  - base images, and the BuildKit image the release builder uses;
+  - the registry image used in CI;
+  - every GitHub Action.
+
+  Tool versions (cosign, syft, goreleaser, crane) are pinned by version.
+- **macOS binaries aren't notarised.** Files fetched with `curl` aren't quarantined, so they run. Apple notarisation needs a Fortanix Apple Developer ID and can be added to the release when Fortanix has one.
+
+**Acceptance**
+
+- **`version` prints the release's probe image,** so the digest to mirror is one command away, before any cluster run.
+- **The final audit found two gaps in the evidence and closed them with tests:**
+  - `TestClusterRunImagePullFailure` proves R1.5: after a pull failure, every workstation check completes with the same result as a workstation run. The existing test only covered a missing `--probe-image` flag.
+  - `TestWorkstationEgressIsOnlyTheEndpointsUnderTest` is the automated half of R1.4's packet capture. It runs every real check through a recording network.
+- **The CLI test cluster gains a dynamic client.** Without one, K8S-05 and K8S-08 panicked in CLI tests. The real client always has one, so this was a test gap, not a product bug.
+- **[ACCEPTANCE.md](ACCEPTANCE.md)** lists every criterion with its evidence. It separates what CI proves from what needs a manual run or a Fortanix decision.

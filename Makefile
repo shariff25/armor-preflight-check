@@ -7,7 +7,7 @@ LDFLAGS  := -s -w -X $(PKG)/internal/buildinfo.Version=$(VERSION) \
             -X $(PKG)/internal/buildinfo.Date=$(DATE)
 PLATFORMS := linux/amd64 linux/arm64 darwin/amd64 darwin/arm64
 
-.PHONY: build test lint cross clean probe-image audit-lab
+.PHONY: build test lint cross clean probe-image audit-lab release-snapshot
 
 build:
 	CGO_ENABLED=0 go build -trimpath -ldflags '$(LDFLAGS)' -o bin/armor-preflight ./cmd/armor-preflight
@@ -19,8 +19,8 @@ lint:
 	@test -z "$$(gofmt -l .)" || (gofmt -l . && echo "gofmt needed" && exit 1)
 	go vet ./...
 
-# Static binaries for the four release targets. Releases use goreleaser,
-# which also signs and writes checksums and SBOMs.
+# Static binaries for the four release targets. Releases use
+# scripts/release.sh, which also signs and writes checksums and SBOMs.
 cross:
 	@for p in $(PLATFORMS); do \
 	  os=$${p%/*}; arch=$${p#*/}; \
@@ -37,5 +37,10 @@ probe-image:
 audit-lab:
 	scripts/audit-lab.sh
 
+# A signed release of this commit in build/release (see scripts/release.sh).
+# Needs PROBE_REPOSITORY, a registry to push to, and COSIGN_KEY for SIGN_OFFLINE.
+release-snapshot:
+	VERSION=$(VERSION) scripts/release.sh --snapshot
+
 clean:
-	rm -rf bin dist preflight-out
+	rm -rf bin build dist preflight-out

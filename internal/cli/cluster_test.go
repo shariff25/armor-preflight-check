@@ -10,14 +10,17 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/version"
 	fakediscovery "k8s.io/client-go/discovery/fake"
+	dynamicfake "k8s.io/client-go/dynamic/fake"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/kubernetes/fake"
 	k8stesting "k8s.io/client-go/testing"
 
 	"github.com/shariff25/agent-goverance-OS/armor-preflight/internal/exitcode"
 	"github.com/shariff25/agent-goverance-OS/armor-preflight/internal/kube"
+	"github.com/shariff25/agent-goverance-OS/armor-preflight/internal/model"
 	"github.com/shariff25/agent-goverance-OS/armor-preflight/internal/output"
 	"github.com/shariff25/agent-goverance-OS/armor-preflight/internal/probe/orchestrator"
 	"github.com/shariff25/agent-goverance-OS/armor-preflight/internal/probe/protocol"
@@ -51,7 +54,11 @@ func withCluster(t *testing.T, core *fake.Clientset) {
 	t.Helper()
 	withFakes(t, fakeRegistry(nil))
 	loadKube = func(o kube.Options) (*kube.Clients, error) {
-		return &kube.Clients{Core: core, Context: "aks-armor-test", Server: "https://example.invalid"}, nil
+		dyn := dynamicfake.NewSimpleDynamicClientWithCustomListKinds(runtime.NewScheme(), map[schema.GroupVersionResource]string{
+			{Group: "apiextensions.k8s.io", Version: "v1", Resource: "customresourcedefinitions"}: "CustomResourceDefinitionList",
+			{Group: "cert-manager.io", Version: "v1", Resource: "clusterissuers"}:                 "ClusterIssuerList",
+		})
+		return &kube.Clients{Core: core, Dynamic: dyn, Context: "aks-armor-test", Server: "https://example.invalid"}, nil
 	}
 	oldOrch := newOrchestrator
 	newOrchestrator = func(c kubernetes.Interface, runID, image string) *orchestrator.Orchestrator {
@@ -129,6 +136,57 @@ func TestClusterRunWithoutProbeImage(t *testing.T) {
 		if r.ID == "K8S-01" && r.Status != "pass" {
 			t.Fatalf("K8S-01: %s", r.Status)
 		}
+	}
+}
+
+// R1.5: when nodes can't pull the probe image, the run names the exact image
+// to mirror and still completes every check a workstation run completes, with
+// the same result.
+func TestClusterRunImagePullFailure(t *testing.T) {
+	core := fakeCluster(t, true)
+	core.PrependReactor("create", "pods", func(a k8stesting.Action) (bool, runtime.Object, error) {
+		pod := a.(k8stesting.CreateAction).GetObject().(*corev1.Pod)
+		pod.Status.Phase = corev1.PodPending
+		pod.Status.ContainerStatuses = []corev1.ContainerStatus{{
+			Name:  orchestrator.ContainerName,
+			State: corev1.ContainerState{Waiting: &corev1.ContainerStateWaiting{Reason: "ImagePullBackOff"}},
+		}}
+		return false, nil, nil
+	})
+	withCluster(t, core)
+	settings := writeSettings(t, settingsYAML)
+
+	wsDir := t.TempDir()
+	if _, err := execute("run", "workstation", "-f", settings, "-o", wsDir); exitcode.FromError(err) == exitcode.ToolError {
+		t.Fatalf("workstation run: %v", err)
+	}
+	clDir := t.TempDir()
+	out, err := execute("run", "cluster", "-f", settings, "-o", clDir, "--probe-image", testProbeImage)
+	if exitcode.FromError(err) == exitcode.ToolError {
+		t.Fatalf("cluster run: %v\n%s", err, out)
+	}
+	if !strings.Contains(out, testProbeImage+" could not be pulled") {
+		t.Fatalf("the image to mirror isn't named:\n%s", out)
+	}
+
+	ws, _ := output.ReadRecord(wsDir)
+	cl, _ := output.ReadRecord(clDir)
+	got := map[string]model.Status{}
+	for _, r := range cl.Results {
+		got[r.ID+" "+r.Scope.String()] = r.Status
+	}
+	completed := 0
+	for _, r := range ws.Results {
+		if r.Status == model.StatusSkipped {
+			continue // not a workstation-mode check (probe or cluster write)
+		}
+		completed++
+		if g := got[r.ID+" "+r.Scope.String()]; g != r.Status {
+			t.Errorf("%s: %s in the workstation run, %q after the pull failure", r.ID, r.Status, g)
+		}
+	}
+	if completed < 20 {
+		t.Fatalf("only %d workstation checks completed", completed)
 	}
 }
 

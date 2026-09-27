@@ -21,7 +21,7 @@ func TestVersionPrintsAllThreeVersions(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, want := range []string{"armor-preflight 0.1.0-dev", "catalog 2026.09", "supported Armor versions: 1.0.404"} {
+	for _, want := range []string{"armor-preflight 0.1.0-dev", "catalog 2026.09", "supported Armor versions: 1.0.404", "probe image: none"} {
 		if !strings.Contains(out, want) {
 			t.Errorf("version output missing %q:\n%s", want, out)
 		}

@@ -5,6 +5,8 @@ This covers the Phase 1 code base at the end of milestone M6: about 15,400 lines
 1. **Staff engineer review.** Correctness, best practice, performance and secure coding. It combined static analysis with reading the code by hand.
 2. **Penetration test.** Active attacks on the tool: hostile inputs, a hostile cluster, hostile network endpoints and a hostile local filesystem. Each attack became a test that fails if the weakness returns.
 
+Milestone M7 then added the signed release pipeline and moved to a supported Go release (S13). Its evidence is in [ACCEPTANCE.md](ACCEPTANCE.md), and its design choices are in [DECISIONS.md](DECISIONS.md).
+
 Every finding below is fixed and has a regression test. For the important fixes, the test was also run with the fix removed, to confirm it catches the weakness (marked "mutation-checked").
 
 ## Tools
@@ -12,9 +14,10 @@ Every finding below is fixed and has a regression test. For the important fixes,
 | Tool | Result |
 |---|---|
 | `go vet`, `gofmt` | clean |
-| `staticcheck` 2025.1.1 | 1 style issue (C2), fixed. Now clean, and it runs in CI. |
+| `staticcheck` 2025.1.1, later 2026.2.1 | 1 style issue (C2), fixed. Now clean, and it runs in CI. |
 | `gosec` v2.22.4 | "Hardcoded credential" hits are constant key names, not secrets. File-path hits: see S6 and S11. Unhandled-error hits are `Close` on read-only paths. |
-| `govulncheck` | Couldn't run here (the build sandbox can't reach `vuln.go.dev`), so it runs in CI as a job of its own. Its first run found 36 reachable vulnerabilities: 33 in the Go 1.24.7 standard library (`crypto/x509`, `crypto/tls`, `net/url`, `net/http`, `html/template` and others) and 3 in `golang.org/x/net` v0.38.0 and `golang.org/x/text` v0.23.0. Fixed (S13). |
+| `govulncheck` | Couldn't run here (the build sandbox can't reach `vuln.go.dev`), so it runs in CI as a job of its own. Its first run found 36 reachable vulnerabilities: 33 in the Go 1.24.7 standard library (`crypto/x509`, `crypto/tls`, `net/url`, `net/http`, `html/template` and others) and 3 in `golang.org/x/net` v0.38.0 and `golang.org/x/text` v0.23.0. Fixed (S13); it blocks merges. |
+| `shellcheck`, `actionlint` | Release scripts and workflows are clean; both run in CI. |
 | `go test -race ./...` | clean |
 | `scripts/audit-lab.sh` | passes, against a real kube-apiserver with audit logging |
 
@@ -63,7 +66,7 @@ Severity is the impact if exploited, before the fix.
 | S10 | The output directory and files were world-readable. | Low | Directory 0750, files 0640. | `TestOutputPermissions` |
 | S11 | User-supplied files were read with no size limit, and devices were accepted. | Low | `fsutil.ReadLimited`: regular files only, with a limit per kind of file. | `TestReadLimited`, `TestPentestSettingsPathToDevice` |
 | S12 | Base images were pinned by tag only. No dependency CVE scan. | Low | Both images pinned by digest. `govulncheck` and `staticcheck` jobs in CI. | CI |
-| S13 | Known vulnerabilities in the toolchain and dependencies (reported by `govulncheck`): the standard library of Go 1.24.7, `golang.org/x/net` v0.38.0 and `golang.org/x/text` v0.23.0. | Medium | Go 1.25.14 (minimum in `go.mod`, and the probe image's build stage, pinned by digest), `x/net` v0.55.0, `x/text` v0.39.0. | CI `govulncheck` |
+| S13 | Known vulnerabilities in the toolchain and dependencies (reported by `govulncheck`): the standard library of Go 1.24.7, `golang.org/x/net` v0.38.0 and `golang.org/x/text` v0.23.0. | Medium | Go 1.26.8, the newest patch of a supported Go release (Go 1.25 is out of support since Go 1.27 shipped). It's the minimum in `go.mod` and the probe image's build stage, pinned by digest. `x/net` v0.59.0, `x/text` v0.42.0. | CI `govulncheck` |
 | P1 | Performance: every check re-listed all nodes and pods (8 node lists and 4 cluster-wide pod lists per run). | — | A per-run cache (`Env.Memo`). Errors aren't cached, and concurrent callers share one fetch. | `TestClusterWideListsAreShared`, `TestMemo` |
 | C2 | An error string started with a capital letter (ST1005). | — | Fixed. | staticcheck |
 
@@ -74,4 +77,4 @@ Severity is the impact if exploited, before the fix.
 - **Operator-controlled endpoints.** The settings file decides some endpoints (registry URL, storage account, syslog host). Pointing them at internal services is the operator's choice, not a server-side request forgery.
 - **Run IDs are guessable.** A run ID has 16 random bits plus the minute. Someone who can create namespaces could squat on a likely name. Preflight then reports that it couldn't create its namespace, and never deletes a namespace it didn't create.
 - **Cleanup trusts volume claim references.** `cleanup` deletes persistent volumes claimed from an `armor-preflight-*` namespace. Only someone who can already create or edit persistent volumes could point one there.
-- **GitHub Actions are pinned by version tag, not commit SHA.** SHA pinning is recommended before release (M7).
+- **Release tools are pinned by version, not digest.** cosign, syft, goreleaser and crane are installed by version. GitHub Actions, base images and the release BuildKit image are pinned by commit or digest.

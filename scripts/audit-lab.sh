@@ -31,7 +31,7 @@ set -euo pipefail
 ROOT=$(cd "$(dirname "$0")/.." && pwd)
 WORK=${WORK:-$(mktemp -d)}
 K8S_VERSION=${K8S_VERSION:-1.34.x}
-# setup-envtest from controller-runtime release-0.22, which builds with Go 1.24.
+# setup-envtest from controller-runtime release-0.22 (needs Go 1.24 or later).
 SETUP_ENVTEST_VERSION=${SETUP_ENVTEST_VERSION:-v0.0.0-20260125163108-a19ec76a3c5d}
 ETCD_PORT=${ETCD_PORT:-23790}
 API_PORT=${API_PORT:-16443}
@@ -41,7 +41,7 @@ pids=()
 cleanup() { for p in "${pids[@]}"; do kill "$p" 2>/dev/null || true; done; }
 trap cleanup EXIT
 
-BIN=$(cd "$WORK" && GOFLAGS= GOTOOLCHAIN=local go run "sigs.k8s.io/controller-runtime/tools/setup-envtest@$SETUP_ENVTEST_VERSION" use "$K8S_VERSION" --bin-dir "$WORK/envtest" -p path)
+BIN=$(cd "$WORK" && GOFLAGS='' GOTOOLCHAIN=local go run "sigs.k8s.io/controller-runtime/tools/setup-envtest@$SETUP_ENVTEST_VERSION" use "$K8S_VERSION" --bin-dir "$WORK/envtest" -p path)
 KUBECTL="$BIN/kubectl --kubeconfig $WORK/kubeconfig --context admin"
 
 cd "$WORK"

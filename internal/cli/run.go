@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"net"
+	"net/http"
 	"os"
 	"os/signal"
 	"sort"
@@ -39,6 +40,11 @@ var (
 	now                                = time.Now
 	loadKube                           = kube.Load
 	newOrchestrator                    = orchestrator.New
+	// The workstation's only outbound paths besides the Kubernetes API.
+	newHTTPClient                 = func() *http.Client { return tlsutil.NewHTTPClient(tlsutil.Options{}) }
+	resolver      engine.Resolver = net.DefaultResolver
+	// The local tools WS-01 looks for.
+	localTools engine.LocalTools = execTools{}
 )
 
 // DefaultProbeTimeout bounds how long cluster mode waits for probe pods.
@@ -125,9 +131,9 @@ func (o *runOptions) run(ctx context.Context, stdout io.Writer) (err error) {
 		Settings:     st,
 		SettingsFile: o.settingsFile,
 		LookupEnv:    lookupEnv,
-		Local:        execTools{},
-		DNS:          net.DefaultResolver,
-		HTTP:         tlsutil.NewHTTPClient(tlsutil.Options{}),
+		Local:        localTools,
+		DNS:          resolver,
+		HTTP:         newHTTPClient(),
 		Now:          now,
 	}
 	// Workstation mode can only read. Cluster mode can also write, but only

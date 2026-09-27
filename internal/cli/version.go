@@ -25,6 +25,11 @@ func newVersionCmd() *cobra.Command {
 			fmt.Fprintf(out, "armor-preflight %s (commit %s, built %s)\n", buildinfo.Version, buildinfo.Commit, buildinfo.Date)
 			fmt.Fprintf(out, "catalog %s\n", c.CatalogVersion)
 			fmt.Fprintf(out, "supported Armor versions: %s\n", strings.Join(c.ArmorVersions, ", "))
+			probe := buildinfo.ProbeImage
+			if probe == "" {
+				probe = "none (development build; pass --probe-image)"
+			}
+			fmt.Fprintf(out, "probe image: %s\n", probe)
 			return nil
 		},
 	}

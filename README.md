@@ -15,6 +15,40 @@ outputs and the security model), see **[docs/ARCHITECTURE.md](docs/ARCHITECTURE.
 >
 > CC-05 (SGX quote generation) needs an SGX probe image built with the enclave toolchain Fortanix chooses. Pass it with `--sgx-probe-image`; [docs/sgx-probe.md](docs/sgx-probe.md) has the contract that image must meet. Without it, CC-05 is skipped with that reason.
 
+## Quick start
+
+Run Preflight from the admin workstation Armor will be installed from: a Linux machine with `kubectl`, Helm, jq and OpenSSL, and a kubeconfig for the target cluster.
+
+**1. Get the CLI.** From a release, download `armor-preflight_<version>_linux_<arch>.tar.gz`, [verify it](#verifying-a-release), and extract the `armor-preflight` binary onto your `PATH`. Or build it from source (Go 1.26.8 or later):
+
+```
+git clone https://github.com/shariff25/armor-preflight-check.git
+cd armor-preflight-check
+make install                  # installs ~/.local/bin/armor-preflight
+armor-preflight version
+```
+
+`make install PREFIX=/usr/local` (with sudo) installs it system-wide instead; `make uninstall` removes it.
+
+**2. Write a settings file.** Copy [`examples/settings.example.yaml`](examples/settings.example.yaml) and fill in the Armor version, domains, registry, storage, proxy and syslog. This step is optional, but without it the checks that need those values are skipped. Export any environment variables the file names for secrets.
+
+**3. Run the read-only checks.** These make no changes to the cluster (least-privilege role: [`deploy/rbac/workstation.yaml`](deploy/rbac/workstation.yaml)):
+
+```
+armor-preflight run workstation -f settings.yaml -c <kube-context>
+```
+
+**4. Run the full checks.** These start probe pods on each node pool, in a temporary namespace that Preflight deletes afterwards (needs [`deploy/rbac/cluster.yaml`](deploy/rbac/cluster.yaml)):
+
+```
+armor-preflight run cluster -f settings.yaml -c <kube-context> \
+  --probe-image <registry>/armor-preflight-probe@sha256:<digest>
+```
+
+**5. Read the results.** The terminal shows the verdict and what each team must fix. `./preflight-out` holds `report.html` to share, `result.json`, and `firewall-request.csv` for the network team. The [exit code](#exit-codes) is 0 (READY), 1 (warnings), 2 (NOT READY) or 3 (Preflight failed), so scripts and CI can gate on it. To send the results to support, run `armor-preflight bundle -f settings.yaml`; it lists the contents and asks before writing `bundle.tgz`.
+
+`armor-preflight --help` and `armor-preflight <command> --help` list every flag. `armor-preflight completion bash|zsh|fish` prints shell completion.
+
 ## Commands
 
 | Command | What it does |

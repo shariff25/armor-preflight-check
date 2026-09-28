@@ -6,11 +6,23 @@ LDFLAGS  := -s -w -X $(PKG)/internal/buildinfo.Version=$(VERSION) \
             -X $(PKG)/internal/buildinfo.Commit=$(COMMIT) \
             -X $(PKG)/internal/buildinfo.Date=$(DATE)
 PLATFORMS := linux/amd64 linux/arm64
+PREFIX   ?= $(HOME)/.local
 
-.PHONY: build test lint cross clean probe-image audit-lab release-snapshot
+.PHONY: build install uninstall test lint cross clean probe-image audit-lab release-snapshot
 
 build:
 	CGO_ENABLED=0 go build -trimpath -ldflags '$(LDFLAGS)' -o bin/armor-preflight ./cmd/armor-preflight
+
+# Installs the CLI to $(PREFIX)/bin (default ~/.local/bin; no root needed).
+# Use PREFIX=/usr/local with sudo for a system-wide install.
+install: build
+	install -d $(DESTDIR)$(PREFIX)/bin
+	install -m 0755 bin/armor-preflight $(DESTDIR)$(PREFIX)/bin/armor-preflight
+	@case ":$$PATH:" in *":$(PREFIX)/bin:"*) ;; \
+	  *) echo "note: $(PREFIX)/bin is not on PATH; add it, or run $(PREFIX)/bin/armor-preflight" ;; esac
+
+uninstall:
+	rm -f $(DESTDIR)$(PREFIX)/bin/armor-preflight
 
 test:
 	go test ./...

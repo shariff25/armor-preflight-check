@@ -1,6 +1,8 @@
 package orchestrator
 
 import (
+	"strings"
+
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -65,7 +67,7 @@ func PodSpec(name, namespace, runID, pool, image string, selector map[string]str
 			Containers: []corev1.Container{{
 				Name:            ContainerName,
 				Image:           image,
-				ImagePullPolicy: corev1.PullIfNotPresent,
+				ImagePullPolicy: pullPolicy(image),
 				Args:            []string{"--request", protocol.RequestFile},
 				Env: []corev1.EnvVar{
 					{Name: "NODE_NAME", ValueFrom: &corev1.EnvVarSource{FieldRef: &corev1.ObjectFieldSelector{FieldPath: "spec.nodeName"}}},
@@ -86,6 +88,17 @@ func PodSpec(name, namespace, runID, pool, image string, selector map[string]str
 			}},
 		},
 	}
+}
+
+// pullPolicy pulls a tag-only image on every run, so an image cached on a
+// node under the same tag (stale, or planted) never runs with the probe
+// credentials mounted. A digest is immutable, so a cached copy is exactly
+// the image asked for.
+func pullPolicy(image string) corev1.PullPolicy {
+	if strings.Contains(image, "@sha256:") {
+		return corev1.PullIfNotPresent
+	}
+	return corev1.PullAlways
 }
 
 // PoolsFromNodes groups nodes into pools, selecting each pool by its pool

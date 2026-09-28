@@ -79,6 +79,18 @@ func TestRejects(t *testing.T) {
 		"bad port":            {"armorVersion: 1.0.404\nsyslog:\n  host: h\n  port: 70000\n", "out of range"},
 		"malformed":           {"armorVersion: [\n", "parse settings"},
 		"negative replicas":   {"armorVersion: 1.0.404\nreplicas: -1\n", "replicas"},
+		// Hosts decide where credentials are sent: a registry.url with
+		// userinfo would send the registry password to collector.example.
+		"registry url with userinfo":  {"armorVersion: 1.0.404\nregistry:\n  url: cr.download.fortanix.com@collector.example\n", "registry.url"},
+		"registry url with scheme":    {"armorVersion: 1.0.404\nregistry:\n  url: https://cr.example.com\n", "registry.url"},
+		"registry url with path":      {"armorVersion: 1.0.404\nregistry:\n  url: cr.example.com/v2\n", "registry.url"},
+		"registry url bad port":       {"armorVersion: 1.0.404\nregistry:\n  url: cr.example.com:99999\n", "registry.url"},
+		"storage fqdn with space":     {"armorVersion: 1.0.404\nstorage:\n  accountFqdn: \"s.blob.core.windows.net x\"\n", "storage.accountFqdn"},
+		"syslog host with CRLF":       {"armorVersion: 1.0.404\nsyslog:\n  host: \"syslog.example.com\\r\\nX-Injected: 1\"\n", "syslog.host"},
+		"attestation host with query": {"armorVersion: 1.0.404\nattestation:\n  azureAttestationHost: \"a.attest.azure.net?x=1\"\n", "attestation.azureAttestationHost"},
+		"container upper case":        {"armorVersion: 1.0.404\nstorage:\n  container: Medusa\n", "storage.container"},
+		"container double hyphen":     {"armorVersion: 1.0.404\nstorage:\n  container: a--b\n", "storage.container"},
+		"container path":              {"armorVersion: 1.0.404\nstorage:\n  container: medusa/../x\n", "storage.container"},
 	}
 	for name, c := range cases {
 		t.Run(name, func(t *testing.T) {
@@ -128,5 +140,20 @@ func TestShippedExampleParses(t *testing.T) {
 	}
 	if s.Storage.AccountKind != "StorageV2" || s.Proxy.HTTPSProxy == "" {
 		t.Fatalf("got %+v", s)
+	}
+}
+
+func TestValidHosts(t *testing.T) {
+	for _, h := range []string{"cr.download.fortanix.com", "mirror.corp.example:5000", "localhost", "localhost:5000",
+		"10.0.0.5", "10.0.0.5:5000", "fd00::1", "[fd00::1]:5000", "internal_host.corp", "h", "example.com."} {
+		if !validHost(h) {
+			t.Errorf("%q should be valid", h)
+		}
+	}
+	for _, h := range []string{"", "a@b.com", "https://a.com", "a.com/x", "a.com:0", "a.com:http", "a b.com", "a.com\r\n",
+		"-a.com", "a..com", "[fd00::1]", strings.Repeat("a", 64) + ".com"} {
+		if validHost(h) {
+			t.Errorf("%q should be invalid", h)
+		}
 	}
 }

@@ -78,3 +78,39 @@ Severity is the impact if exploited, before the fix.
 - **Run IDs are guessable.** A run ID has 16 random bits plus the minute. Someone who can create namespaces could squat on a likely name. Preflight then reports that it couldn't create its namespace, and never deletes a namespace it didn't create.
 - **Cleanup trusts volume claim references.** `cleanup` deletes persistent volumes claimed from an `armor-preflight-*` namespace. Only someone who can already create or edit persistent volumes could point one there.
 - **Release tools are pinned by version, not digest.** cosign, syft, goreleaser and crane are installed by version. GitHub Actions, base images and the release BuildKit image are pinned by commit or digest.
+
+## Second review (September 2026)
+
+A second pass after the move to this repository: every package read again by hand, with the attacker model above plus one more adversary, **a hostile or careless settings file**. The settings file is designed to be shared (it holds no secrets), yet it decides where the secrets are sent.
+
+Each finding has a regression test that failed before the fix.
+
+### Findings
+
+| # | Finding | Severity | Fix | Test |
+|---|---|---|---|---|
+| A-1 | Host settings were not validated. `registry.url: cr.download.fortanix.com@collector.example` parses as host `collector.example` with a harmless-looking userinfo, so the registry password (and tokens) would go there. A line break in `syslog.host` or another host reached the hand-written CONNECT and GET requests. | Medium | `registry.url`, `storage.accountFqdn`, `syslog.host` and `attestation.azureAttestationHost` must be a host name or IP address with an optional port. `storage.container` must follow Azure's container naming rules. | `TestRejects` (new cases), `TestValidHosts` |
+| A-2 | The probe dialled only the first resolved address, in string order. For a dual-stack endpoint an IPv6 address can sort first (`2001:db8::1` before `203.0.113.1`). On a node with no IPv6 route (common on AKS), NET-02 then reported a reachable endpoint as blocked and asked the network team for a firewall rule it didn't need. | Medium (wrong verdict) | IPv4 addresses first, then IPv6, up to 4, each given an equal share of the remaining stage time. The evidence names any address that failed. | `TestDualStackPrefersIPv4`, `TestNextAddressAfterRefusal` |
+| A-3 | An `https://` proxy URL was reached with plaintext CONNECT (on port 80 when no port was given), so every probe network check failed behind an HTTPS proxy. Other schemes were silently treated as HTTP. The Go HTTP client used for REG-03 and BAK-02 already did this correctly. | Low | The staged tester speaks TLS to an `https://` proxy and requires its certificate to verify against the public roots or `proxy.trustedCaPath`. Unsupported schemes are named. | `TestThroughHTTPSProxy` |
+| A-4 | Probe targets were not validated before they were written into CONNECT and GET requests (header injection if a request were altered in the cluster). | Low (defence in depth) | Hosts are limited to host-name and IP characters, paths must start with `/` and contain no spaces or controls, and ports must be 1–65535. Nothing is dialled otherwise. | `TestInvalidTargetIsRefused` |
+| A-5 | Probe pods always used `imagePullPolicy: IfNotPresent`. With a tag-only `--probe-image`, an image already cached on a node under that tag (stale from an older release, or planted) ran with the registry and storage credentials mounted. | Low | Tag-only images are pulled every run (`Always`). Digest-pinned images, which are immutable, keep `IfNotPresent`. | `TestProbeImagePullPolicy` |
+| A-6 | The write guard judged the decoded URL path, while the server receives the escaped one. Namespaced `/apis/…` writes matched on a substring anywhere in the path. Each client built from the same config also rewired the one shared guard's transport. None was reachable from Preflight's own requests. | Low (defence in depth) | Judge the escaped path (a `%2F` is refused). Match `/apis/{group}/{version}/namespaces/{ns}/…` by segment. Bind the guard per transport. | `TestGuardChecksTheEscapedPath`, `TestRunNamespaceMode` (new cases), `TestGuardBindsEachTransport` |
+| A-7 | `bundle` read `result.json` with no size limit and followed a symlink to a device (`/dev/zero` hung it). It also named the bundle's tar entries after the run ID in the file without checking it (`../../etc`). | Low | Read with `fsutil.ReadLimited` (regular files, 64 MiB), and require a well-formed run ID. | `TestReadRecordRefusesHostileResults` |
+| A-8 | `cleanup --run-id` went unchecked into a label selector. | Low | Must be a run ID (`YYYYMMDD-HHMM-xxxx`). | `TestCleanupRejectsMalformedRunID` |
+| A-9 | A CSV cell with leading spaces before `=`, `+`, `-` or `@` escaped the formula guard (spreadsheets still evaluate it). | Low | The guard looks past leading spaces. | `TestCSVFormulaBehindSpaces` |
+
+### Performance
+
+| # | Finding | Fix | Test |
+|---|---|---|---|
+| P2 | The engine ran checks level by level, with a barrier after each level. One slow check held back every check in the next level. K8S-10 and K8S-11 (up to 120 s waiting for a volume or LoadBalancer) delayed REG-02/03/04, CC-01/02 and BAK-02 although none depends on them. | Each check starts as soon as its own parents finish. Results, skips and their order are unchanged. | `TestSlowCheckDoesNotDelayUnrelatedChecks` (REG-02 started after 500 ms before the change, immediately after) |
+| P3 | CI ran the whole suite twice for every commit on a branch with a pull request (`push` and `pull_request` on every branch). | `push` runs on `main` only. | CI |
+| P4 | `labelValue` compiled its regular expression on every call. | Compiled once. | existing tests |
+
+### Reviewed and left as is
+
+- **Token realm on shared domains.** The registry client accepts a token realm in the registry's parent domain, so for `myregistry.azurecr.io` any `*.azurecr.io` realm is accepted. The realm comes from the TLS-authenticated registry itself, so only that registry could name another tenant. A public-suffix list would add a dependency for little gain.
+- **Credentials through a trusted inspecting proxy.** With `proxy.trustedCaPath` set, REG-03 and BAK-02 send credentials through the TLS-inspecting proxy the customer said to trust. That is the customer's explicit choice, and NET-03 reports the interception.
+- **Very short secrets.** Redaction masks every occurrence of a registered secret, so a one-character secret makes reports noisy. It never leaks.
+- **Redirects.** Registry and blob requests never follow a redirect to plain HTTP, and Go drops `Authorization` on redirects to another host.
+- **Supply chain and CI.** Workflows interpolate no untrusted `${{ }}` into shell steps. Tokens are read-only except in the release job, and base images and actions are pinned.

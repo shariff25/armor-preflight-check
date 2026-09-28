@@ -165,7 +165,7 @@ flowchart LR
 5. **Discover the topology.** It groups nodes into pools, records node IPs and finds the SGX nodes.
 6. **Cluster mode only: run the probes.** It creates the namespace, ConfigMap and Secret, starts one probe per pool and
    one SGX probe per SGX node, and collects their JSON output. Cleanup is deferred and also runs on Ctrl-C.
-7. **Run the engine.** Checks run in dependency levels, in parallel, each under a timeout.
+7. **Run the engine.** Checks run in parallel, each starting once its parents finish, each under a timeout.
 8. **Write the outputs.** It writes `result.json`, `report.html`, `firewall-request.csv` and any artifacts such as
    `imageOverrides.yaml`, then prints the terminal summary.
 9. **Exit with the verdict's code.** If an internal error occurred, or this build lacks a check, it exits 3 instead of
@@ -257,13 +257,15 @@ code.
 
 ## 8. The engine: order, skips and the verdict
 
-[`internal/engine`](../internal/engine/engine.go) sorts the catalog into dependency **levels**. It runs each level's
-checks in parallel. Each check gets the per-check timeout (`-t`, default 10 s), or the catalog's longer
-`timeoutSeconds` for checks that wait on the cluster, such as K8S-10 and K8S-11.
+[`internal/engine`](../internal/engine/engine.go) runs every check in parallel, and starts each one **as soon as its own
+parents have finished**. A slow check (K8S-11 can wait up to 90 s for a LoadBalancer) therefore delays only the checks
+that depend on it, never unrelated ones. The catalog is checked for cycles first. Each check gets the per-check timeout
+(`-t`, default 10 s), or the catalog's longer `timeoutSeconds` for checks that wait on the cluster, such as K8S-10 and
+K8S-11.
 
 ```mermaid
 flowchart TB
-    start(["next check in level"]) --> tgt{"target supported<br/>and mode allows it?"}
+    start(["a check whose parents<br/>have all finished"]) --> tgt{"target supported<br/>and mode allows it?"}
     tgt -->|"no: cluster-write/probe<br/>in workstation mode"| s1["skipped:<br/>workstation mode"]
     tgt -->|yes| img{"probe check and<br/>probe unavailable?"}
     img -->|yes| s2["skipped: probe image<br/>&lt;digest&gt; could not be pulled"]
@@ -433,7 +435,7 @@ the probe Secret while a cluster-mode run lasts.
 | `internal/cli` | `run workstation\|cluster`, `bundle`, `cleanup`, `version`; the run flow in `run.go` |
 | `internal/catalog` | embedded `catalog.yaml`, validation, version coverage, endpoint resolution |
 | `internal/settings` | settings schema, validation, env-var secret references |
-| `internal/engine` | dependency levels, parallel execution, skip rules, timeouts, report |
+| `internal/engine` | dependency-driven parallel scheduling, skip rules, timeouts, report |
 | `internal/checks` | one file per area (`workstation`, `kubernetes`, `cc`, `cc05`, `network`, `registry`, `backup`, `pki`, `clusterwrite`, `probe`), plus topology discovery |
 | `internal/model` | Result, Evidence, Status, Severity, Scope, Verdict, run ID |
 | `internal/kube` | client-go wrapper, MutationGuard, the permission lists reported in outputs |

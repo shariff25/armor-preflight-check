@@ -4,7 +4,6 @@ package kube
 
 import (
 	"fmt"
-	"net/http"
 
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/kubernetes"
@@ -71,10 +70,7 @@ func FromConfig(cfg *rest.Config, contextName string, o Options) (*Clients, erro
 	cfg.ContentType = "application/json"
 	cfg.AcceptContentTypes = "application/json"
 	guard := &Guard{Mode: o.Mode, Namespace: o.Namespace}
-	cfg.Wrap(func(rt http.RoundTripper) http.RoundTripper {
-		guard.Next = rt
-		return guard
-	})
+	cfg.Wrap(guard.bind)
 	core, err := kubernetes.NewForConfig(cfg)
 	if err != nil {
 		return nil, err

@@ -447,3 +447,44 @@ func TestStripControl(t *testing.T) {
 		t.Fatalf("%q", got)
 	}
 }
+
+// Pen test: result.json is read back by `bundle`. Planted as a symlink to a
+// device it must not hang, and a run ID it carries must not become a path
+// in the bundle (tar entries are named after it).
+func TestReadRecordRefusesHostileResults(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.Symlink("/dev/zero", filepath.Join(dir, ResultFile)); err != nil {
+		t.Skip(err)
+	}
+	done := make(chan error, 1)
+	go func() { _, err := ReadRecord(dir); done <- err }()
+	select {
+	case err := <-done:
+		if err == nil || !strings.Contains(err.Error(), "not a regular file") {
+			t.Fatalf("got %v", err)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("reading a device as result.json hung")
+	}
+
+	dir = t.TempDir()
+	rec := sample(t)
+	rec.Run.ID = "../../etc"
+	if _, err := WriteFiles(dir, rec, fwInputs(t, nil), redact.New()); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := ReadRecord(dir); err == nil || !strings.Contains(err.Error(), "run ID") {
+		t.Fatalf("got %v", err)
+	}
+}
+
+// Leading spaces do not stop a spreadsheet from evaluating a formula.
+func TestCSVFormulaBehindSpaces(t *testing.T) {
+	b, err := RenderFirewallCSV([]FirewallRow{{SourceSubnet: "  =1+1", Destination: "host", Port: 443, Purpose: "p", CheckID: "NET-02"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if line := strings.Split(string(b), "\n")[1]; !strings.HasPrefix(line, "'  =1+1") {
+		t.Fatalf("got %s", line)
+	}
+}

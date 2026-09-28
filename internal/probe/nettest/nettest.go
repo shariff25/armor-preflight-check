@@ -60,13 +60,44 @@ func fail(target, stage string, format string, args ...any) protocol.Stage {
 	return protocol.Stage{Target: target, Stage: stage, OK: false, Detail: fmt.Sprintf(format, args...)}
 }
 
+// maxAddresses bounds how many resolved addresses the TCP stage tries.
+const maxAddresses = 4
+
+// validTarget refuses hosts and paths that could not appear in a well-formed
+// request: both are written into hand-built CONNECT and GET requests, so a
+// line break or space would inject a header.
+func validTarget(tgt protocol.Target) error {
+	if tgt.Host == "" || tgt.Port < 1 || tgt.Port > 65535 {
+		return fmt.Errorf("invalid target %q port %d", tgt.Host, tgt.Port)
+	}
+	for _, c := range tgt.Host {
+		if !(c >= 'a' && c <= 'z' || c >= 'A' && c <= 'Z' || c >= '0' && c <= '9' || strings.ContainsRune(".-_:", c)) {
+			return fmt.Errorf("invalid target host %q", tgt.Host)
+		}
+	}
+	if tgt.Path != "" {
+		if tgt.Path[0] != '/' {
+			return fmt.Errorf("invalid target path %q", tgt.Path)
+		}
+		for _, c := range tgt.Path {
+			if c <= ' ' || c == 0x7f {
+				return fmt.Errorf("invalid target path %q", tgt.Path)
+			}
+		}
+	}
+	return nil
+}
+
 // Test runs every stage for a target, stopping at the first failure.
 func (t *Tester) Test(ctx context.Context, tgt protocol.Target) []protocol.Stage {
+	if err := validTarget(tgt); err != nil {
+		return []protocol.Stage{fail(tgt.Host, protocol.StageDNS, "%v", err)}
+	}
 	addr := net.JoinHostPort(tgt.Host, strconv.Itoa(tgt.Port))
 	proxied := t.Proxy != nil && !tgt.TCPOnly && !NoProxyMatch(t.NoProxy, tgt.Host)
 	var stages []protocol.Stage
 
-	var dialAddr string
+	var dialAddrs []string
 	if proxied {
 		s := ok(tgt.Host, protocol.StageDNS, "not resolved locally: reached through proxy %s", t.Proxy.Host)
 		s.Data = map[string]string{protocol.DataViaProxy: t.Proxy.Host}
@@ -82,19 +113,31 @@ func (t *Tester) Test(ctx context.Context, tgt protocol.Target) []protocol.Stage
 		s := ok(tgt.Host, protocol.StageDNS, "resolves to %s", strings.Join(addrs, ", "))
 		s.Data = map[string]string{protocol.DataAddresses: strings.Join(addrs, ",")}
 		stages = append(stages, s)
-		dialAddr = net.JoinHostPort(addrs[0], strconv.Itoa(tgt.Port))
+		for _, a := range dialOrder(addrs) {
+			dialAddrs = append(dialAddrs, net.JoinHostPort(a, strconv.Itoa(tgt.Port)))
+		}
 	}
 
 	start := time.Now()
-	conn, err := t.connect(ctx, proxied, dialAddr, addr)
-	if err != nil {
-		return append(stages, fail(addr, protocol.StageTCP, "%s", describe(err, t.Timeout)))
+	var conn net.Conn
+	var how string
+	if proxied {
+		c, err := t.connectProxy(ctx, addr)
+		if err != nil {
+			return append(stages, fail(addr, protocol.StageTCP, "%s", describe(err, t.Timeout)))
+		}
+		conn, how = c, "connected through proxy "+t.Proxy.Host
+	} else {
+		c, used, failed := t.dial(ctx, dialAddrs)
+		if c == nil {
+			return append(stages, fail(addr, protocol.StageTCP, "%s", strings.Join(failed, "; ")))
+		}
+		conn, how = c, "connected"
+		if len(failed) > 0 {
+			how = fmt.Sprintf("connected to %s after %s", used, strings.Join(failed, "; "))
+		}
 	}
 	defer conn.Close()
-	how := "connected"
-	if proxied {
-		how = "connected through proxy " + t.Proxy.Host
-	}
 	stages = append(stages, ok(addr, protocol.StageTCP, "%s in %s", how, time.Since(start).Round(time.Millisecond)))
 	if tgt.TCPOnly {
 		return stages
@@ -111,15 +154,72 @@ func (t *Tester) Test(ctx context.Context, tgt protocol.Target) []protocol.Stage
 	return append(stages, t.get(tconn, tgt.Host, addr, tgt.Path))
 }
 
-func (t *Tester) connect(ctx context.Context, proxied bool, dialAddr, target string) (net.Conn, error) {
+// dialOrder puts IPv4 addresses first, then IPv6, and keeps at most
+// maxAddresses. Many nodes (AKS among them) have no IPv6 route, and string
+// order would otherwise put an address such as 2001:db8::1 before
+// 203.0.113.1, reporting a reachable endpoint as blocked.
+func dialOrder(addrs []string) []string {
+	var v4, v6 []string
+	for _, a := range addrs {
+		if ip := net.ParseIP(a); ip != nil && ip.To4() == nil {
+			v6 = append(v6, a)
+		} else {
+			v4 = append(v4, a)
+		}
+	}
+	out := append(v4, v6...)
+	if len(out) > maxAddresses {
+		out = out[:maxAddresses]
+	}
+	return out
+}
+
+// dial tries each address in turn within the stage timeout, giving each an
+// equal share of what is left, so one blackholed address cannot use up the
+// time the next one needs. It returns the connection and the address used,
+// or nil and why each address failed.
+func (t *Tester) dial(ctx context.Context, addrs []string) (net.Conn, string, []string) {
 	ctx, cancel := context.WithTimeout(ctx, t.Timeout)
 	defer cancel()
-	if !proxied {
-		return t.Dialer.DialContext(ctx, "tcp", dialAddr)
+	deadline, _ := ctx.Deadline()
+	var failed []string
+	for i, a := range addrs {
+		budget := time.Until(deadline) / time.Duration(len(addrs)-i)
+		actx, acancel := context.WithTimeout(ctx, budget)
+		conn, err := t.Dialer.DialContext(actx, "tcp", a)
+		acancel()
+		if err == nil {
+			return conn, a, failed
+		}
+		if len(addrs) == 1 {
+			return nil, "", []string{describe(err, t.Timeout)}
+		}
+		failed = append(failed, a+": "+describe(err, budget.Round(time.Millisecond)))
+		if ctx.Err() != nil {
+			break
+		}
+	}
+	return nil, "", failed
+}
+
+// connectProxy opens a tunnel to target through the proxy with CONNECT. An
+// https:// proxy is reached over TLS, as Go's HTTP client does, and its
+// certificate must verify against the public roots or the customer CA.
+func (t *Tester) connectProxy(ctx context.Context, target string) (net.Conn, error) {
+	ctx, cancel := context.WithTimeout(ctx, t.Timeout)
+	defer cancel()
+	scheme := strings.ToLower(t.Proxy.Scheme)
+	defaultPort := "80"
+	switch scheme {
+	case "http", "":
+	case "https":
+		defaultPort = "443"
+	default:
+		return nil, fmt.Errorf("proxy %s: the %s scheme is not supported; use an http:// or https:// proxy", t.Proxy.Host, scheme)
 	}
 	proxyAddr := t.Proxy.Host
 	if t.Proxy.Port() == "" {
-		proxyAddr = net.JoinHostPort(t.Proxy.Hostname(), "80")
+		proxyAddr = net.JoinHostPort(t.Proxy.Hostname(), defaultPort)
 	}
 	conn, err := t.Dialer.DialContext(ctx, "tcp", proxyAddr)
 	if err != nil {
@@ -127,6 +227,21 @@ func (t *Tester) connect(ctx context.Context, proxied bool, dialAddr, target str
 	}
 	if dl, ok := ctx.Deadline(); ok {
 		conn.SetDeadline(dl)
+	}
+	if scheme == "https" {
+		cfg := tlsutil.Config(nil)
+		cfg.ServerName = t.Proxy.Hostname()
+		cfg.InsecureSkipVerify = true // verified below, against explicit pools
+		tc := tls.Client(conn, cfg)
+		if err := tc.HandshakeContext(ctx); err != nil {
+			conn.Close()
+			return nil, fmt.Errorf("proxy %s: TLS handshake failed: %w", t.Proxy.Host, err)
+		}
+		if !t.trusted(tc.ConnectionState().PeerCertificates, t.Proxy.Hostname()) {
+			tc.Close()
+			return nil, fmt.Errorf("proxy %s: its certificate is not trusted (add its CA with proxy.trustedCaPath)", t.Proxy.Host)
+		}
+		conn = tc
 	}
 	req := "CONNECT " + target + " HTTP/1.1\r\nHost: " + target + "\r\n"
 	if u := t.Proxy.User; u != nil {
@@ -154,6 +269,29 @@ func (t *Tester) connect(ctx context.Context, proxied bool, dialAddr, target str
 		return nil, fmt.Errorf("proxy %s sent unexpected data after CONNECT", t.Proxy.Host)
 	}
 	return conn, nil
+}
+
+// roots are the public roots: the configured pool, else the system's.
+func (t *Tester) roots() *x509.CertPool {
+	if t.Roots != nil {
+		return t.Roots
+	}
+	if sys, err := x509.SystemCertPool(); err == nil {
+		return sys
+	}
+	return x509.NewCertPool()
+}
+
+// trusted reports whether a presented chain verifies for host against the
+// public roots or the customer CA.
+func (t *Tester) trusted(certs []*x509.Certificate, host string) bool {
+	if len(certs) == 0 {
+		return false
+	}
+	if verify(certs, host, t.roots()) == nil {
+		return true
+	}
+	return t.CustomCA != nil && verify(certs, host, t.CustomCA) == nil
 }
 
 // handshake completes TLS and records the presented chain. It verifies the
@@ -184,14 +322,7 @@ func (t *Tester) handshake(ctx context.Context, conn net.Conn, host, addr string
 		protocol.DataIssuer:     name(certs[0].Issuer.Organization, certs[0].Issuer.CommonName),
 		protocol.DataRootIssuer: name(certs[len(certs)-1].Issuer.Organization, certs[len(certs)-1].Issuer.CommonName),
 	}
-	roots := t.Roots
-	if roots == nil {
-		var err error
-		if roots, err = x509.SystemCertPool(); err != nil {
-			roots = x509.NewCertPool()
-		}
-	}
-	verr := verify(certs, host, roots)
+	verr := verify(certs, host, t.roots())
 	data[protocol.DataVerified] = strconv.FormatBool(verr == nil)
 	trusted := verr == nil
 	if verr != nil {

@@ -274,6 +274,19 @@ func (n *Network) NewProxy(intercept *CA) *Proxy {
 	return p
 }
 
+// NewTLSProxy starts a proxy that clients reach over TLS (an https://
+// proxy URL), serving a certificate for host from ca, and registers host on
+// the network.
+func (n *Network) NewTLSProxy(host string, ca *CA, intercept *CA) *Proxy {
+	raw, _ := net.Listen("tcp", "127.0.0.1:0")
+	ln := tls.NewListener(raw, &tls.Config{Certificates: []tls.Certificate{ca.Issue(host)}})
+	p := &Proxy{Addr: raw.Addr().String(), net: n, intercept: intercept, ln: ln}
+	n.closers = append(n.closers, ln)
+	n.register(host, raw.Addr().String())
+	go p.serve()
+	return p
+}
+
 func (p *Proxy) serve() {
 	for {
 		c, err := p.ln.Accept()

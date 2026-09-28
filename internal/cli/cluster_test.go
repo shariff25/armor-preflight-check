@@ -3,6 +3,7 @@ package cli
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -266,5 +267,17 @@ func TestClusterRunWithSGXProbeImage(t *testing.T) {
 	}
 	if !found {
 		t.Fatalf("SGX probe missing from the report: %+v", rec.Probes)
+	}
+}
+
+// --run-id goes into a label selector; only a real run ID is accepted.
+func TestCleanupRejectsMalformedRunID(t *testing.T) {
+	core := fakeCluster(t, false)
+	withCluster(t, core)
+	for _, id := range []string{"x,app.kubernetes.io/managed-by!=armor-preflight", "20260926-1512-7f3a-evil", "nope"} {
+		out, err := execute("cleanup", "--run-id", id)
+		if exitcode.FromError(err) != exitcode.ToolError || !strings.Contains(out+fmt.Sprint(err), "run ID") {
+			t.Fatalf("%q: exit %d: %v\n%s", id, exitcode.FromError(err), err, out)
+		}
 	}
 }

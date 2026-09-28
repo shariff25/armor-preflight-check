@@ -323,3 +323,20 @@ func TestLogReadIsBounded(t *testing.T) {
 		t.Fatalf("log request did not set limitBytes: %s", query)
 	}
 }
+
+// A tag-only image is pulled on every run, so a stale or tampered image
+// cached on a node under the same tag never receives the probe credentials.
+// A digest is immutable, so a cached copy is exactly the signed image.
+func TestProbeImagePullPolicy(t *testing.T) {
+	for image, want := range map[string]corev1.PullPolicy{
+		"registry.example.com/armor-preflight-probe@sha256:" + strings.Repeat("a", 64):     corev1.PullIfNotPresent,
+		"registry.example.com/armor-preflight-probe:1.0@sha256:" + strings.Repeat("b", 64): corev1.PullIfNotPresent,
+		"registry.example.com/armor-preflight-probe:1.0":                                   corev1.PullAlways,
+		"registry.example.com/armor-preflight-probe":                                       corev1.PullAlways,
+	} {
+		pod := PodSpec("probe-x", "ns", "run", "pool", image, nil, nil, "request-x", true)
+		if got := pod.Spec.Containers[0].ImagePullPolicy; got != want {
+			t.Errorf("%s: pull policy %s, want %s", image, got, want)
+		}
+	}
+}

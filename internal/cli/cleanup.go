@@ -15,6 +15,7 @@ import (
 
 	"github.com/shariff25/armor-preflight-check/internal/exitcode"
 	"github.com/shariff25/armor-preflight-check/internal/kube"
+	"github.com/shariff25/armor-preflight-check/internal/model"
 	"github.com/shariff25/armor-preflight-check/internal/probe/orchestrator"
 )
 
@@ -45,6 +46,10 @@ func newCleanupCmd(g *globalOptions) *cobra.Command {
 }
 
 func (o *cleanupOptions) run(ctx context.Context, out io.Writer) error {
+	// The run ID goes into a label selector and a namespace name.
+	if o.runID != "" && !model.ValidRunID(o.runID) {
+		return exitcode.ToolFailure(fmt.Errorf("--run-id %q is not a run ID (YYYYMMDD-HHMM-xxxx)", o.runID))
+	}
 	clients, err := loadKube(kube.Options{Kubeconfig: o.kubeconfig, Context: o.kubeContext, Mode: kube.Cleanup})
 	if err != nil {
 		return exitcode.ToolFailure(err)

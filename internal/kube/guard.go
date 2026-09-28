@@ -57,21 +57,41 @@ func (e *ErrBlocked) Error() string {
 	return fmt.Sprintf("armor-preflight refused a %s to %s: this mode makes no changes to the cluster", e.Method, e.Path)
 }
 
-// RoundTrip implements http.RoundTripper.
+// RoundTrip implements http.RoundTripper, forwarding allowed requests to
+// g.Next.
 func (g *Guard) RoundTrip(req *http.Request) (*http.Response, error) {
-	ok := g.allowed(req.Method, req.URL.Path)
-	if ok && g.Mode == RunNamespace && req.Method == http.MethodPost && strings.TrimSuffix(req.URL.Path, "/") == "/api/v1/namespaces" {
+	return g.roundTrip(req, g.Next)
+}
+
+// bind returns a RoundTripper that applies this guard's policy (and records
+// into its blocked list) in front of next. Each client gets its own binding,
+// so building a second client never rewires the first one's transport.
+func (g *Guard) bind(next http.RoundTripper) http.RoundTripper {
+	return roundTripperFunc(func(req *http.Request) (*http.Response, error) { return g.roundTrip(req, next) })
+}
+
+type roundTripperFunc func(*http.Request) (*http.Response, error)
+
+func (f roundTripperFunc) RoundTrip(req *http.Request) (*http.Response, error) { return f(req) }
+
+func (g *Guard) roundTrip(req *http.Request, next http.RoundTripper) (*http.Response, error) {
+	// Judge the path as the server will receive it: escaped. A %2F that
+	// decodes into an allowed path is refused, because how the server then
+	// interprets it is not the guard's to guess.
+	path := req.URL.EscapedPath()
+	ok := g.allowed(req.Method, path)
+	if ok && g.Mode == RunNamespace && req.Method == http.MethodPost && strings.TrimSuffix(path, "/") == "/api/v1/namespaces" {
 		// Creating a namespace: check it is this run's, so the guard does
 		// not depend on the admission policy being installed.
 		ok = g.createsRunNamespace(req)
 	}
 	if !ok {
 		g.mu.Lock()
-		g.blocked = append(g.blocked, req.Method+" "+req.URL.Path)
+		g.blocked = append(g.blocked, req.Method+" "+path)
 		g.mu.Unlock()
-		return nil, &ErrBlocked{Method: req.Method, Path: req.URL.Path}
+		return nil, &ErrBlocked{Method: req.Method, Path: path}
 	}
-	return g.Next.RoundTrip(req)
+	return next.RoundTrip(req)
 }
 
 // Blocked lists writes the guard refused, as "METHOD path".
@@ -116,10 +136,10 @@ func (g *Guard) allowed(method, path string) bool {
 		return true
 	case path == ns, strings.HasPrefix(path, ns+"/"):
 		return true
-	case strings.HasPrefix(path, "/apis/") && strings.Contains(path, "/namespaces/"+g.Namespace+"/"):
-		return true
 	}
-	return false
+	// A namespaced API group resource: /apis/{group}/{version}/namespaces/{ns}/{resource}[/...].
+	seg := strings.Split(path, "/")
+	return len(seg) >= 7 && seg[1] == "apis" && seg[4] == "namespaces" && seg[5] == g.Namespace
 }
 
 // createsRunNamespace reads a namespace-create body (restoring it for the

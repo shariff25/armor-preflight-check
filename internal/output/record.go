@@ -6,10 +6,10 @@ import (
 	"encoding/json"
 	"fmt"
 	"math"
-	"os"
 	"path/filepath"
 	"time"
 
+	"github.com/shariff25/armor-preflight-check/internal/fsutil"
 	"github.com/shariff25/armor-preflight-check/internal/model"
 )
 
@@ -126,7 +126,9 @@ func MarshalRecord(r *Record) ([]byte, error) {
 
 // ReadRecord loads result.json from an output directory.
 func ReadRecord(dir string) (*Record, error) {
-	b, err := os.ReadFile(filepath.Join(dir, ResultFile))
+	// The output directory may be shared: read result.json as a bounded,
+	// regular file, never through a planted device or FIFO.
+	b, err := fsutil.ReadLimited(filepath.Join(dir, ResultFile), fsutil.MaxResultBytes)
 	if err != nil {
 		return nil, fmt.Errorf("read the latest run: %w (run `armor-preflight run` first)", err)
 	}
@@ -136,6 +138,10 @@ func ReadRecord(dir string) (*Record, error) {
 	}
 	if r.SchemaVersion != model.SchemaVersion {
 		return nil, fmt.Errorf("%s has schema version %q; this build reads %q", ResultFile, r.SchemaVersion, model.SchemaVersion)
+	}
+	// The run ID names the bundle's top-level directory.
+	if !model.ValidRunID(r.Run.ID) {
+		return nil, fmt.Errorf("%s has an invalid run ID %q", ResultFile, r.Run.ID)
 	}
 	return &r, nil
 }

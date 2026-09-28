@@ -224,23 +224,41 @@ func Run(ctx context.Context, env *Env, reg Registry, opts Options) (*Report, er
 		return nil, fmt.Errorf("timeout must be positive, got %s", opts.Timeout)
 	}
 	r := &runner{env: env, reg: reg, opts: opts, results: map[string][]model.Result{}}
+	// Each check starts as soon as its own parents have finished, not when
+	// the whole previous level has: a slow check (K8S-11 waits up to 90s for
+	// a LoadBalancer) then only delays the checks that depend on it. Levels
+	// has already rejected cycles, so every wait below ends.
+	done := make(map[string]chan struct{}, len(env.Catalog.Checks))
 	for _, level := range levels {
-		if err := ctx.Err(); err != nil {
-			return nil, fmt.Errorf("run interrupted: %w", err)
+		for _, def := range level {
+			done[def.ID] = make(chan struct{})
 		}
-		var wg sync.WaitGroup
+	}
+	var wg sync.WaitGroup
+	for _, level := range levels {
 		for _, def := range level {
 			wg.Add(1)
 			go func(def *catalog.Check) {
 				defer wg.Done()
+				defer close(done[def.ID])
+				for _, parent := range def.DependsOn {
+					select {
+					case <-done[parent]:
+					case <-ctx.Done():
+						return
+					}
+				}
+				if ctx.Err() != nil {
+					return
+				}
 				res := r.runOne(ctx, def)
 				r.mu.Lock()
 				r.results[def.ID] = res
 				r.mu.Unlock()
 			}(def)
 		}
-		wg.Wait()
 	}
+	wg.Wait()
 	if err := ctx.Err(); err != nil {
 		return nil, fmt.Errorf("run interrupted: %w", err)
 	}

@@ -119,6 +119,9 @@ func TestRunNamespaceMode(t *testing.T) {
 		"POST /apis/apps/v1/namespaces/armor-preflight-20260926-1512-7f3a//../../namespaces/default/deployments",
 		"DELETE /api/v1/persistentvolumes/../namespaces/default",
 		"POST /api/v1/namespaces/armor-preflight-20260926-1512-7f3a%2F..%2Fdefault/pods",
+		// A cluster-scoped path that merely contains the run namespace.
+		"DELETE /apis/example.com/v1/clusterthings/namespaces/armor-preflight-20260926-1512-7f3a/x",
+		"POST /apis/apps/v1/namespaces/armor-preflight-20260926-1512-7f3a",
 	}
 	for _, s := range allowed {
 		m, p, _ := strings.Cut(s, " ")
@@ -175,5 +178,50 @@ func TestRunNamespaceGuardChecksNamespaceName(t *testing.T) {
 		if errors.As(err, &blocked) {
 			t.Fatalf("own namespace blocked: %v", err)
 		}
+	}
+}
+
+type recorder struct{ seen []string }
+
+func (r *recorder) RoundTrip(req *http.Request) (*http.Response, error) {
+	r.seen = append(r.seen, req.Method+" "+req.URL.EscapedPath())
+	return &http.Response{StatusCode: http.StatusOK, Body: http.NoBody, Request: req}, nil
+}
+
+// The server receives the escaped path. A %2F that decodes into an allowed
+// path must still be refused, since the guard cannot know how the server
+// will interpret it.
+func TestGuardChecksTheEscapedPath(t *testing.T) {
+	ns := "armor-preflight-20260926-1512-7f3a"
+	next := &recorder{}
+	g := &Guard{Mode: RunNamespace, Namespace: ns, Next: next}
+	req, _ := http.NewRequest(http.MethodDelete, "https://api.example/api/v1/namespaces/"+ns+"/pods%2Fx", nil)
+	if req.URL.Path != "/api/v1/namespaces/"+ns+"/pods/x" {
+		t.Fatalf("test setup: decoded path %q", req.URL.Path)
+	}
+	if _, err := g.RoundTrip(req); err == nil || len(next.seen) != 0 {
+		t.Fatalf("an encoded path was let through: err=%v seen=%v", err, next.seen)
+	}
+	ok, _ := http.NewRequest(http.MethodDelete, "https://api.example/api/v1/namespaces/"+ns+"/pods/x", nil)
+	if _, err := g.RoundTrip(ok); err != nil || len(next.seen) != 1 {
+		t.Fatalf("a clean path was refused: %v", err)
+	}
+}
+
+// Each client gets its own binding to its own transport; building a second
+// client must not rewire the first one's requests.
+func TestGuardBindsEachTransport(t *testing.T) {
+	g := &Guard{Mode: ReadOnly}
+	a, b := &recorder{}, &recorder{}
+	ra, rb := g.bind(a), g.bind(b)
+	req, _ := http.NewRequest(http.MethodGet, "https://api.example/api/v1/nodes", nil)
+	ra.RoundTrip(req)
+	rb.RoundTrip(req)
+	if len(a.seen) != 1 || len(b.seen) != 1 {
+		t.Fatalf("a=%v b=%v", a.seen, b.seen)
+	}
+	w, _ := http.NewRequest(http.MethodPost, "https://api.example/api/v1/namespaces/x/pods", nil)
+	if _, err := rb.RoundTrip(w); err == nil || len(g.Blocked()) != 1 {
+		t.Fatalf("a bound guard must still block writes and record them: %v %v", err, g.Blocked())
 	}
 }

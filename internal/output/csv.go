@@ -155,11 +155,11 @@ func RenderFirewallCSV(rows []FirewallRow) ([]byte, error) {
 }
 
 // csvSafe stops spreadsheet formula injection (CWE-1236): a cell starting
-// with =, +, -, @, tab or carriage return is evaluated by Excel and Sheets,
-// so it is prefixed with a quote. Real subnets, host names and IDs never
-// start with those characters.
+// with =, +, -, @, tab or carriage return, even after leading spaces, is
+// evaluated by Excel and Sheets, so it is prefixed with a quote. Real
+// subnets, host names and IDs never start with those characters.
 func csvSafe(v string) string {
-	if v != "" && strings.ContainsRune("=+-@\t\r", rune(v[0])) {
+	if t := strings.TrimLeft(v, " "); t != "" && strings.ContainsRune("=+-@\t\r", rune(t[0])) {
 		return "'" + v
 	}
 	return v

@@ -534,3 +534,35 @@ func TestMemo(t *testing.T) {
 		t.Fatalf("concurrent callers fetched %d times", n)
 	}
 }
+
+// TestSlowCheckDoesNotDelayUnrelatedChecks: a check starts as soon as its
+// own parents finish. A slow check (K8S-11 waits for a LoadBalancer) must
+// not hold back checks that do not depend on it, such as REG-02 (parent
+// REG-01), which a level-by-level scheduler would make wait.
+func TestSlowCheckDoesNotDelayUnrelatedChecks(t *testing.T) {
+	e := env(t, ModeCluster)
+	e.Catalog.Check("K8S-11").TimeoutSeconds = 5
+	reg := allPass(e)
+	const slow = 500 * time.Millisecond
+	reg["K8S-11"] = func(ctx context.Context, _ *Env, d *catalog.Check) []model.Result {
+		select {
+		case <-time.After(slow):
+		case <-ctx.Done():
+		}
+		return resultsFor(d, model.StatusPass, nil)
+	}
+	start := time.Now()
+	var reg02Start atomic.Int64
+	pass := reg["REG-02"]
+	reg["REG-02"] = func(ctx context.Context, e *Env, d *catalog.Check) []model.Result {
+		reg02Start.Store(int64(time.Since(start)))
+		return pass(ctx, e, d)
+	}
+	rep := run(t, e, reg)
+	if got := time.Duration(reg02Start.Load()); got >= slow/2 {
+		t.Fatalf("REG-02 started %s into the run, waiting on unrelated K8S-11 (%s)", got, slow)
+	}
+	if r := find(rep, "K8S-11", model.ClusterScope()); r == nil || r.Status != model.StatusPass {
+		t.Fatalf("K8S-11: %+v", r)
+	}
+}

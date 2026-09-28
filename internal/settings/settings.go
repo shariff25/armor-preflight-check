@@ -7,10 +7,12 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net"
 	"net/url"
 	"reflect"
 	"regexp"
 	"sort"
+	"strconv"
 	"strings"
 
 	"sigs.k8s.io/yaml"
@@ -201,6 +203,24 @@ func (s *Settings) validate() error {
 			errs = append(errs, errors.New("proxy.httpsProxy must not contain credentials"))
 		}
 	}
+	// Hosts decide where Preflight sends the registry password and storage
+	// key, and go into hand-written HTTP requests in the probe. Anything but a
+	// host name or IP address (with an optional port) is refused: a scheme,
+	// userinfo ("cr.download.fortanix.com@collector.example" is a request to
+	// collector.example), a path, whitespace or a line break.
+	for _, h := range []struct{ path, value string }{
+		{"registry.url", s.Registry.URL},
+		{"storage.accountFqdn", s.Storage.AccountFQDN},
+		{"syslog.host", s.Syslog.Host},
+		{"attestation.azureAttestationHost", s.Attestation.AzureAttestationHost},
+	} {
+		if h.value != "" && !validHost(h.value) {
+			errs = append(errs, fmt.Errorf("%s %q is not a host name or IP address (with an optional :port)", h.path, h.value))
+		}
+	}
+	if c := s.Storage.Container; c != "" && (len(c) < 3 || len(c) > 63 || !containerRE.MatchString(c)) {
+		errs = append(errs, fmt.Errorf("storage.container %q is not a valid Azure container name (3 to 63 lower-case letters, digits and single hyphens)", c))
+	}
 	for _, env := range []struct{ path, name string }{
 		{"registry.passwordEnv", s.Registry.PasswordEnv},
 		{"storage.credentialsEnv", s.Storage.CredentialsEnv},
@@ -213,6 +233,32 @@ func (s *Settings) validate() error {
 }
 
 var envNameRE = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`)
+
+var (
+	// hostnameRE is a DNS name: dot-separated labels of letters, digits,
+	// hyphens and underscores (some internal names use them), each at most
+	// 63 characters and not starting or ending with a hyphen.
+	hostnameRE = regexp.MustCompile(`^(?i)[a-z0-9_](?:[a-z0-9_-]{0,61}[a-z0-9_])?(?:\.[a-z0-9_](?:[a-z0-9_-]{0,61}[a-z0-9_])?)*\.?$`)
+	// containerRE is an Azure blob container name: lower-case letters and
+	// digits, with single hyphens between them.
+	containerRE = regexp.MustCompile(`^[a-z0-9](?:-?[a-z0-9])*$`)
+)
+
+// validHost reports whether s is a host name or IP address, optionally
+// followed by :port.
+func validHost(s string) bool {
+	host := s
+	if h, p, err := net.SplitHostPort(s); err == nil {
+		if n, err := strconv.Atoi(p); err != nil || n < 1 || n > 65535 {
+			return false
+		}
+		host = h
+	}
+	if net.ParseIP(host) != nil {
+		return true
+	}
+	return len(host) <= 253 && hostnameRE.MatchString(host)
+}
 
 // Has reports whether the dotted settings path (for example
 // "storage.accountFqdn") has a non-empty value.

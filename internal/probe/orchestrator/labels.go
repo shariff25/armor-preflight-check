@@ -45,9 +45,11 @@ func objectName(prefix, part string) string {
 	return name
 }
 
+var nonLabel = regexp.MustCompile(`[^A-Za-z0-9._-]+`)
+
 // labelValue makes a string safe as a label value.
 func labelValue(s string) string {
-	v := strings.Trim(regexp.MustCompile(`[^A-Za-z0-9._-]+`).ReplaceAllString(s, "-"), "-._")
+	v := strings.Trim(nonLabel.ReplaceAllString(s, "-"), "-._")
 	if len(v) > 63 {
 		v = strings.TrimRight(v[:63], "-._")
 	}

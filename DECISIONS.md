@@ -248,3 +248,12 @@ The user chose not to gate the build on D-1 to D-3, so the plan's defaults apply
 - **Module path** is now `github.com/shariff25/armor-preflight-check`. This supersedes the M0 entry above.
 - **Release tags** are now plain `vX.Y.Z`. The `armor-preflight/` prefix (M7 entry above) only existed because the old repository held other projects. `release.sh` still passes the version in, and the release workflow still drafts the GitHub release itself. The keyless signing identity is now `.github/workflows/armor-preflight-release.yml@refs/tags/v…` in this repository.
 - **CI** runs on every push and pull request, from the repository root.
+
+## Second review
+
+Decisions from the second security and performance review (SECURITY-REVIEW.md, "Second review").
+
+- **Scheduling.** Checks start as soon as their own parents finish, instead of level by level. An interrupt now stops checks that haven't started yet, wherever they sit in the graph (this replaces the M1 note on interrupts between levels).
+- **Host settings are validated.** A host setting that isn't a host name or IP address (with an optional port) is a settings error (exit 3), not a check failure. `domains.*` are still judged by PKI-01 and NET-05, which report them per team.
+- **Probe pull policy.** `Always` for a tag-only `--probe-image` and `IfNotPresent` for a digest. Release builds default to a digest, so they are unaffected.
+- **HTTPS proxies.** The staged network tester supports `http://` and `https://` proxies. Other schemes (for example `socks5://`) fail the TCP stage with a message naming the scheme.

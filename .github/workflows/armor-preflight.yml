@@ -1,7 +1,10 @@
 name: armor-preflight
 
+# Pull requests run the full suite; pushes only on main (and a branch with a
+# pull request is not tested twice for every commit).
 on:
   push:
+    branches: [main]
   pull_request:
 
 permissions:

@@ -15,6 +15,7 @@ const (
 	MaxSettingsBytes = 1 << 20  // settings file
 	MaxPEMBytes      = 1 << 20  // certificates
 	MaxManifestBytes = 10 << 20 // release manifest
+	MaxResultBytes   = 64 << 20 // result.json read back by bundle
 )
 
 // ReadLimited reads at most max bytes of a regular file, and fails if the
